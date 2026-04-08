@@ -20,14 +20,40 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+
+	<!-- ======================================================== -->
+	<!-- Privacy Usage Descriptions                                -->
+	<!-- App Store Review Guideline 5.1.1 準拠                    -->
+	<!-- ======================================================== -->
+
+	<!-- BLE: 接続デバイスとの距離測定のみに使用。外部送信なし -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>BLEデバイスとの距離を監視してアラームを鳴らすために使用します。</string>
+	<string>あなたが接続したBluetoothデバイスとの距離を測定し、2メートル以上離れた際にお知らせするために使用します。デバイス識別情報の収集・保存・第三者への送信は行いません。</string>
+
+	<!-- モーション: 歩行開始タイミングのBLE距離チェックトリガーのみに使用 -->
 	<key>NSMotionUsageDescription</key>
-	<string>立ち上がりや歩き出しを検知してBLE距離チェックをトリガーするために使用します。</string>
+	<string>立ち上がりや歩き出しのタイミングを検出し、そのタイミングでBluetoothデバイスとの距離確認を行うために使用します。位置情報の取得には使用しません。モーションデータの外部送信は行いません。</string>
+
+	<!-- ======================================================== -->
+	<!-- Background Modes                                          -->
+	<!-- ======================================================== -->
+
+	<!-- watchOS: Background App Refresh (WKApplicationRefreshBackgroundTask) を有効化 -->
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>self-contained</string>
+	</array>
+
+	<!-- BLE Central として バックグラウンド動作を許可                              -->
+	<!-- WKBluetoothAlertBackgroundTask のトリガーに必要                            -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
 	</array>
+
+	<!-- ======================================================== -->
+	<!-- watchOS App Flags                                         -->
+	<!-- ======================================================== -->
 	<key>WKApplication</key>
 	<true/>
 	<key>WKWatchKitApp</key>

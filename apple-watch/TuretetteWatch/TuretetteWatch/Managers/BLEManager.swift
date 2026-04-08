@@ -1,15 +1,28 @@
 import Foundation
 import CoreBluetooth
+import UserNotifications
+import WatchKit
 import Combine
 
-/// Manages BLE scanning, connection, RSSI monitoring, and distance estimation.
+/// BLE のスキャン・接続・RSSI 監視・距離推定を管理する。
 ///
-/// Distance formula: distance = 10 ^ ((txPower - RSSI) / (10 * n))
-/// txPower = -59 dBm (measured at 1 m), n = 2.0 (free-space path-loss exponent)
-/// At 2 m, the expected RSSI threshold is approximately -65 dBm.
+/// ## 距離推定式
+/// `distance = 10 ^ ((txPower - RSSI) / (10 * n))`
+/// - txPower: -59 dBm（1m地点での実測値）
+/// - n: 2.0（自由空間の経路損失指数）
+/// - 2m 相当の RSSI 閾値: 約 -65 dBm
+///
+/// ## バックグラウンド動作
+/// - `backgroundBLECheckRequested` 通知を受信 → RSSI 単発チェック
+/// - `backgroundBLEAlertReceived` 通知を受信 → 切断状態を評価
+/// - 圏外検知かつバックグラウンド → `UNUserNotificationCenter` でローカル通知を発火
+///
+/// ## watchOS BLE 制限（24時間 5 回）
+/// バックグラウンド接続の試行は24時間で5回まで保証される。
+/// CMMotionActivityManager による歩行トリガー設計は省電力化のためのもの。
 final class BLEManager: NSObject, ObservableObject {
 
-    // MARK: - Published state
+    // MARK: - Published State
 
     @Published var discoveredPeripherals: [CBPeripheral] = []
     @Published var connectedPeripheral: CBPeripheral?
@@ -21,29 +34,38 @@ final class BLEManager: NSObject, ObservableObject {
 
     // MARK: - Configuration
 
-    let distanceThreshold: Double = 2.0  // metres
-    private let txPower: Double = -59.0  // dBm at 1 m
+    /// 圏外と判定する距離閾値（メートル）
+    let distanceThreshold: Double = 2.0
+
+    private let txPower: Double = -59.0       // dBm @ 1m
     private let pathLossExponent: Double = 2.0
 
-    // MARK: - Callbacks / publishers
+    // MARK: - Callbacks
 
-    /// Called on the main queue whenever the device transitions out of range.
+    /// フォアグラウンドで圏外になった時に呼ばれる（ContentView → AlarmManager 連携用）
     var onOutOfRange: (() -> Void)?
 
     // MARK: - Private
 
     private var centralManager: CBCentralManager!
     private var rssiTimer: Timer?
+    private var peripheralMap: [UUID: CBPeripheral] = [:]
     private var cancellables = Set<AnyCancellable>()
 
-    // Keep a map so we can find peripherals by identifier.
-    private var peripheralMap: [UUID: CBPeripheral] = [:]
+    /// バックグラウンド通知の識別子
+    private let outOfRangeNotificationID = "com.turetette.watch.outOfRange"
 
-    // MARK: - Init
+    // MARK: - Init / Deinit
 
     override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: nil)
+        // RestoreIdentifierKey: バックグラウンドで OS が BLE スタックを復元する際に使用
+        centralManager = CBCentralManager(
+            delegate: self,
+            queue: nil,
+            options: [CBCentralManagerOptionRestoreIdentifierKey: "com.turetette.watch.central"]
+        )
+        subscribeBackgroundNotifications()
     }
 
     deinit {
@@ -79,7 +101,53 @@ final class BLEManager: NSObject, ObservableObject {
         centralManager.cancelPeripheralConnection(peripheral)
     }
 
-    // MARK: - RSSI polling
+    // MARK: - Background Notification Subscription
+
+    private func subscribeBackgroundNotifications() {
+        // Background App Refresh: RSSI 単発チェックを実行する
+        NotificationCenter.default
+            .publisher(for: .backgroundBLECheckRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.performBackgroundRSSICheck()
+            }
+            .store(in: &cancellables)
+
+        // BLE アラート/切断: 接続状態を評価してローカル通知を発火する
+        NotificationCenter.default
+            .publisher(for: .backgroundBLEAlertReceived)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleBackgroundBLEAlert()
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Background BLE Handlers
+
+    /// Background App Refresh で呼ばれる RSSI 単発チェック
+    private func performBackgroundRSSICheck() {
+        guard isConnected, let peripheral = connectedPeripheral else {
+            // 接続が切れていれば圏外通知を発火
+            if isOutOfRange {
+                sendOutOfRangeNotification(reason: "接続デバイスが見つかりません")
+            }
+            return
+        }
+        peripheral.readRSSI()
+        // 結果は `didReadRSSI` デリゲートで受け取り、圏外なら通知する
+    }
+
+    /// WKBluetoothAlertBackgroundTask で呼ばれる切断状態の評価
+    private func handleBackgroundBLEAlert() {
+        if !isConnected {
+            sendOutOfRangeNotification(reason: "BLEデバイスの接続が切れました")
+        } else if isOutOfRange {
+            sendOutOfRangeNotification(reason: "BLEデバイスが離れています（距離: \(String(format: "%.1f", estimatedDistance))m）")
+        }
+    }
+
+    // MARK: - RSSI Polling (Foreground)
 
     private func startRSSIPolling() {
         stopRSSIPolling()
@@ -93,7 +161,7 @@ final class BLEManager: NSObject, ObservableObject {
         rssiTimer = nil
     }
 
-    // MARK: - Distance calculation
+    // MARK: - Distance Calculation
 
     private func calculateDistance(from rssiValue: Int) -> Double {
         guard rssiValue != 0 else { return 0 }
@@ -101,11 +169,43 @@ final class BLEManager: NSObject, ObservableObject {
         return pow(10.0, ratio)
     }
 
+    /// 圏外状態を更新し、状態変化に応じて通知またはコールバックを呼ぶ
     private func updateOutOfRange(distance: Double) {
         let wasOutOfRange = isOutOfRange
         isOutOfRange = distance > distanceThreshold
-        if isOutOfRange && !wasOutOfRange {
+        guard isOutOfRange && !wasOutOfRange else { return }
+
+        let appState = WKApplication.shared().applicationState
+        if appState == .active {
+            // フォアグラウンド: ContentView の .onReceive → AlarmManager のルートで処理
             onOutOfRange?()
+        } else {
+            // バックグラウンド: 直接ローカル通知を発火
+            sendOutOfRangeNotification(
+                reason: "BLEデバイスが離れました（距離: \(String(format: "%.1f", distance))m）"
+            )
+        }
+    }
+
+    // MARK: - Local Notification
+
+    /// バックグラウンド圏外検知時のローカル通知を発火する
+    private func sendOutOfRangeNotification(reason: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "⚠️ アラーム"
+        content.body = reason
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: outOfRangeNotificationID,
+            content: content,
+            trigger: trigger
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("[BLEManager] Notification error: \(error.localizedDescription)")
+            }
         }
     }
 }
@@ -117,16 +217,31 @@ extension BLEManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
-            // Ready — do nothing until user requests scan.
             break
-        case .poweredOff, .resetting, .unauthorized, .unsupported, .unknown:
+        default:
             DispatchQueue.main.async {
                 self.isConnected = false
                 self.isScanning = false
                 self.discoveredPeripherals = []
             }
-        @unknown default:
-            break
+        }
+    }
+
+    /// BLE スタックの State Restoration（バックグラウンドからの復元）
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
+        // 復元された接続済みペリフェラルを再設定する
+        if let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] {
+            for peripheral in peripherals {
+                peripheral.delegate = self
+                peripheralMap[peripheral.identifier] = peripheral
+                if peripheral.state == .connected {
+                    DispatchQueue.main.async {
+                        self.connectedPeripheral = peripheral
+                        self.isConnected = true
+                    }
+                    startRSSIPolling()
+                }
+            }
         }
     }
 
@@ -176,6 +291,11 @@ extension BLEManager: CBCentralManagerDelegate {
             self.rssi = 0
             self.estimatedDistance = 0
             self.isOutOfRange = false
+        }
+        // バックグラウンドで切断された場合はローカル通知を発火
+        let appState = WKApplication.shared().applicationState
+        if appState != .active {
+            sendOutOfRangeNotification(reason: "BLEデバイスの接続が切れました")
         }
     }
 }
