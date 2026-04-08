@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import WatchKit
 
 struct ContentView: View {
     @EnvironmentObject var bleManager: BLEManager
@@ -40,17 +41,18 @@ struct ContentView: View {
                 .environmentObject(alarmManager)
         }
         // Trigger alarm when out of range AND motion detected
-        .onChange(of: bleManager.isOutOfRange) { outOfRange in
+        // .onReceive を使用して watchOS 9.0〜10.x 両対応・非推奨警告なし
+        .onReceive(bleManager.$isOutOfRange) { outOfRange in
             if outOfRange && motionManager.isWalking && bleManager.isConnected {
                 alarmManager.startAlarm(reason: "BLEデバイスが離れました")
             }
         }
-        .onChange(of: motionManager.isWalking) { walking in
+        .onReceive(motionManager.$isWalking) { walking in
             if walking && bleManager.isOutOfRange && bleManager.isConnected {
                 alarmManager.startAlarm(reason: "BLEデバイスが離れました")
             }
         }
-        .onChange(of: alarmManager.isAlarmActive) { active in
+        .onReceive(alarmManager.$isAlarmActive) { active in
             showAlarmView = active
         }
     }
