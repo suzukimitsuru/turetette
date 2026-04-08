@@ -54,9 +54,11 @@
 	<!-- ======================================================== -->
 	<!-- watchOS App Flags                                         -->
 	<!-- ======================================================== -->
+
+	<!-- SwiftUI @main を使う独立型 watchOS 7+ アプリに必要                -->
+	<!-- WKWatchKitApp は不要（古い WatchKit 2.0 スタイル用のため削除）    -->
+	<!-- WKWatchKitApp を残すと WKCompanionAppBundleIdentifier が要求される -->
 	<key>WKApplication</key>
-	<true/>
-	<key>WKWatchKitApp</key>
 	<true/>
 </dict>
 </plist>
