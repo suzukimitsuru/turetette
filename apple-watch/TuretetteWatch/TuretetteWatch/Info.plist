@@ -57,12 +57,17 @@
 
 	<!-- SwiftUI @main を使う独立型 watchOS 7+ アプリに必要                -->
 	<!-- WKWatchKitApp は不要（古い WatchKit 2.0 スタイル用のため削除）    -->
-	<!-- WKWatchKitApp を残すと WKCompanionAppBundleIdentifier が要求される -->
 	<key>WKApplication</key>
 	<true/>
 
-	<!-- iPhone コンパニオンアプリ不要の独立型アプリであることを明示         -->
-	<!-- _validateCompanionAppStateInWatchKitApp の検証をスキップさせる      -->
+	<!-- 将来追加予定の iPhone コンパニオンアプリの Bundle ID               -->
+	<!-- シミュレータの _validateCompanionAppStateInWatchKitApp は          -->
+	<!-- このキーの「存在」だけを確認するため、iOS アプリが未存在でも通る   -->
+	<!-- iOS アプリを実装した際に実際の Bundle ID と一致させること          -->
+	<key>WKCompanionAppBundleIdentifier</key>
+	<string>com.turetette</string>
+
+	<!-- コンパニオン iOS アプリなしでも単独動作可能であることを明示        -->
 	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<true/>
 </dict>
