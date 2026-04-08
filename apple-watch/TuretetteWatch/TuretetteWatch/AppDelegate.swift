@@ -15,11 +15,14 @@ import UserNotifications
 ///             └─ BLEManager: RSSI 単発チェック
 ///                  └─ 圏外なら UNUserNotificationCenter で通知発火
 ///
-/// BLE 切断検知 (OS が自動トリガー)
-///   └─ WKBluetoothAlertBackgroundTask
+/// BLE Characteristic 変化 (OS が自動トリガー, watchOS 9+, Series 6 以降)
+///   └─ WKBluetoothAlertRefreshBackgroundTask
 ///        └─ NotificationCenter.post(.backgroundBLEAlertReceived)
 ///             └─ BLEManager: 切断状態を評価してローカル通知発火
 /// ```
+/// - Note: WKBluetoothAlertRefreshBackgroundTask は watchOS 9 以降かつ
+///   Apple Watch Series 6 以降が必要。Apple Watch SE 系では受信できない場合がある。
+///   切断検知は CBCentralManagerDelegate.didDisconnectPeripheral でも行われる。
 final class AppDelegate: NSObject, WKApplicationDelegate {
 
     // MARK: - App Lifecycle
@@ -51,7 +54,7 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
             case let appRefreshTask as WKApplicationRefreshBackgroundTask:
                 handleAppRefresh(appRefreshTask)
 
-            case let bluetoothTask as WKBluetoothAlertBackgroundTask:
+            case let bluetoothTask as WKBluetoothAlertRefreshBackgroundTask:
                 handleBluetoothAlert(bluetoothTask)
 
             case let snapshotTask as WKSnapshotRefreshBackgroundTask:
@@ -97,8 +100,9 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
         task.setTaskCompletedWithSnapshot(false)
     }
 
-    private func handleBluetoothAlert(_ task: WKBluetoothAlertBackgroundTask) {
-        // BLE 切断 / アラート発生 → BLEManager に状態評価を依頼
+    private func handleBluetoothAlert(_ task: WKBluetoothAlertRefreshBackgroundTask) {
+        // BLE Characteristic 変化 / アラート発生 → BLEManager に状態評価を依頼
+        // watchOS 9+、Apple Watch Series 6 以降でのみトリガーされる
         NotificationCenter.default.post(name: .backgroundBLEAlertReceived, object: nil)
         task.setTaskCompleted()
     }

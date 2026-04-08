@@ -10,8 +10,9 @@ extension Notification.Name {
         "com.turetette.watch.backgroundBLECheckRequested"
     )
 
-    /// WKBluetoothAlertBackgroundTask (BLE切断/アラート) が届いた時に AppDelegate が投げる
+    /// WKBluetoothAlertRefreshBackgroundTask (BLE Characteristic 変化アラート) が届いた時に AppDelegate が投げる
     /// BLEManager が受け取り、切断状態を評価してローカル通知を発火する
+    /// watchOS 9+、Apple Watch Series 6 以降でのみトリガーされる
     static let backgroundBLEAlertReceived = Notification.Name(
         "com.turetette.watch.backgroundBLEAlertReceived"
     )

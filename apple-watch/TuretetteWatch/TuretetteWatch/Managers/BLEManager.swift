@@ -138,7 +138,7 @@ final class BLEManager: NSObject, ObservableObject {
         // 結果は `didReadRSSI` デリゲートで受け取り、圏外なら通知する
     }
 
-    /// WKBluetoothAlertBackgroundTask で呼ばれる切断状態の評価
+    /// WKBluetoothAlertRefreshBackgroundTask (watchOS 9+, Series 6以降) で呼ばれる切断状態の評価
     private func handleBackgroundBLEAlert() {
         if !isConnected {
             sendOutOfRangeNotification(reason: "BLEデバイスの接続が切れました")
