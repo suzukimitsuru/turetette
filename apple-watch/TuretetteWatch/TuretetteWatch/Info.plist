@@ -60,5 +60,10 @@
 	<!-- WKWatchKitApp を残すと WKCompanionAppBundleIdentifier が要求される -->
 	<key>WKApplication</key>
 	<true/>
+
+	<!-- iPhone コンパニオンアプリ不要の独立型アプリであることを明示         -->
+	<!-- _validateCompanionAppStateInWatchKitApp の検証をスキップさせる      -->
+	<key>WKRunsIndependentlyOfCompanionApp</key>
+	<true/>
 </dict>
 </plist>
