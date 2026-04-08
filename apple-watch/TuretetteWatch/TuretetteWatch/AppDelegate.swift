@@ -104,7 +104,7 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
         // BLE Characteristic 変化 / アラート発生 → BLEManager に状態評価を依頼
         // watchOS 9+、Apple Watch Series 6 以降でのみトリガーされる
         NotificationCenter.default.post(name: .backgroundBLEAlertReceived, object: nil)
-        task.setTaskCompleted()
+        task.setTaskCompletedWithSnapshot(false)
     }
 
     // MARK: - Notification Permission
