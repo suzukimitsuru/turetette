@@ -24,6 +24,11 @@
 4. **watchOS のバックグラウンド BLE 起床は 24 時間で 5 回**という厳しい予算がある（§2.1）。
    「切れたら即アラーム」を無条件に実装すると 1 日で予算を使い切るため、予算管理の設計が必須。
 5. 現行コードには、この設計に進む前に直すべきバグ・無効設定が数点ある（§9）。
+6. **Apple Watch が GPS + Cellular モデルなら、上記に「サーバ中継」という第3の経路が加わる**（§11）。
+   §1 の「iPhone → Watch の通知経路は無い」はローカル経路に限った話で、Watch が自前の回線を
+   持てば iPhone →サーバ→ APNs → Watch が成立し、BLE の背景起床予算もジオフェンス非対応も
+   回避できる。ただし方式1・方式2 の設計自体は変わらず、サーバ基盤とプライバシー方針の変更
+   という重いコストが乗るため、**ローカル完結版を本線、サーバ版を上乗せ**とするのが妥当。
 
 ---
 
@@ -34,11 +39,13 @@
 | 経路 | 成立するか | 理由 |
 |---|---|---|
 | iPhone がローカル通知を出し、Watch へミラーリング | **不可** | 通知ミラーリングは iPhone↔Watch のリンク経由。方式1 の発報条件はそのリンクが切れた状態そのもの。方式2 でも「離れている」＝リンク圏外である可能性が高い |
-| サーバから APNs で Watch へ直接プッシュ | 可能だが不適 | Watch が単独で Wi-Fi/セルラーに接続している必要があり、サーバ・アカウント基盤も必要。屋外・圏外で最も鳴ってほしい場面で落ちる |
+| サーバから APNs で Watch へ直接プッシュ | 条件付きで可能 | Watch が単独で Wi-Fi/セルラーに接続している必要があり、サーバ・アカウント基盤も必要。圏外では落ちるため単独では成立しないが、**GPS + Cellular モデルではローカル版の弱点を大きく補える**（詳細は §11） |
 | **Watch アプリが自分でローカル通知を出す** | **これしかない** | ネットワーク不要。検知も発報も Watch 内で完結する |
 
 **帰結：検知ロジックとアラームは Watch 側に置く。** 現行の `BLEManager` / `AlarmManager` が
 Watch 側にある構成は正しい。iPhone 側アプリは「ペリフェラル役」と「位置の事前送信役」に徹する。
+（Watch が自前の回線を持てる場合の上乗せ設計は §11 を参照。ただしその場合も本節の
+ローカル完結版は残す。）
 
 ```mermaid
 sequenceDiagram
@@ -154,11 +161,13 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 
 ### 2.5 WatchConnectivity
 
-- Watch 側の `WCSession.isReachable` は、**iPhone アプリが起動していなくても、iPhone が圏内なら
-  true** になる（Watch からの送信で iOS アプリが背景起動されるため）。
-  → 「iPhone と離れた」の**補助シグナル**として使える。
-  ただし `sessionReachabilityDidChange(_:)` は取りこぼし・誤発火の報告が多く、
-  **一次トリガにはしない**。また Wi-Fi 経由でも到達するため、自宅内では圏内判定になりやすい。
+- Watch 側の `WCSession.isReachable` の定義は「iPhone が圏内で通信可能、**かつ Watch アプリが
+  前面、または高優先度のバックグラウンド（ワークアウト中など）で動作している**」。
+  iPhone アプリ側が起動している必要はない（Watch からの送信で iOS アプリが背景起動されるため）
+  が、**Watch アプリが通常のバックグラウンドにいる間は常に false** になるため、
+  **背景での検知トリガーには使えない**。前面にいるときの補助表示に留める。
+  加えて `sessionReachabilityDidChange(_:)` は取りこぼし・誤発火の報告が多い。
+  また「圏内」は Wi-Fi 経由でも成立するため、自宅内では離れても圏内判定になりやすい。
 - `transferUserInfo(_:)` は iPhone がスリープ中でもキューイングされて配信され、
   **Watch アプリを `WKWatchConnectivityRefreshBackgroundTask` で背景起床できる**。
   → 位置情報の事前共有はこれで行う（`updateApplicationContext` は上書きされるが最新値だけ欲しい
@@ -176,7 +185,7 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 | 案 | 構成 | 評価 |
 |---|---|---|
 | **A（推奨）** | iPhone = `CBPeripheralManager`（アドバタイズ＋characteristic）、Watch = `CBCentral` として接続維持 | 接続を張りっぱなしにするので、iPhone がスリープでも OS が iOS アプリを起こしてくれる。切断は双方が数秒で検知。watchOS の背景 BLE 起床（§2.1）が効く唯一の構成 |
-| B | `WCSession.isReachable` の変化を見る | 実装は最小。ただし信頼性が低く、Wi-Fi 経由でも到達扱いになるため自宅内では発報しない。**補助シグナル**に留める |
+| B | `WCSession.isReachable` の変化を見る | 実装は最小だが、**Watch アプリが前面のときしか true にならない**（§2.5）ため背景検知には使えない。信頼性も低く、Wi-Fi 経由でも到達扱いになる。前面表示の補助のみ |
 | C | Watch ⇔ BLE タグ（iPhone を介さない） | 現行実装の想定。タグ側の仕様に依存するが、notify を出せるタグなら A と同じ枠組みで動く |
 
 案 A の iPhone 側要件：
@@ -357,7 +366,7 @@ stateDiagram-v2
 |---|---|---|
 | Guarding | BLE 接続維持、低頻度 notify 受信、位置キャッシュ更新 | ハートビート 1 回 |
 | Suspect | 再接続試行、猶予タイマー。この間は無音 | 切断起床 1 回 |
-| Confirming | `requestLocation()`、`WCSession.isReachable` 確認、モーション状態確認 | 同じ起床枠の中で完結させる |
+| Confirming | `requestLocation()`、再接続可否、モーション状態確認 | 同じ起床枠の中で完結させる |
 | Alarming | 通知連投 ＋（前面化後）Extended Runtime Session でハプティクス継続 | — |
 
 **背景予算（5 回/24h）の管理**
@@ -468,7 +477,7 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 
 ## 8. 実装タスク（分解）
 
-### Watch アプリ
+### Tier 0 / Watch アプリ
 
 | # | 内容 | 対象 |
 |---|---|---|
@@ -487,7 +496,7 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 | 13 | アラーム状態の永続化（背景終了しても復帰時に鳴動継続） | `AlarmManager` |
 | 14 | しきい値（距離・猶予秒数）の設定画面 | `Views/`（新規） |
 
-### iPhone アプリ（新規 `ios/`）
+### Tier 0 / iPhone アプリ（新規 `ios/`）
 
 | # | 内容 |
 |---|---|
@@ -496,6 +505,17 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 | 3 | `startMonitoringSignificantLocationChanges()` + `transferUserInfo` で位置を Watch へ push |
 | 4 | 位置 characteristic の read 対応（Watch から能動取得できるように） |
 | 5 | `WKCompanionAppBundleIdentifier`（現在 `com.turetette`）と Bundle ID を一致させる |
+
+### Tier 1（ネットワーク経由・任意、§11.4）
+
+| # | 内容 |
+|---|---|
+| 1 | Watch アプリの独立 APNs 登録（`apns-topic` = watch アプリの bundle ID） |
+| 2 | `AppDelegate.handle(_:)` に `WKURLSessionRefreshBackgroundTask` 分岐を追加 |
+| 3 | iPhone: 大幅位置変更で起床 → background `URLSession` でサーバへ位置を送信 |
+| 4 | サーバ: 距離判定（サーバ側ジオフェンス）と alert push の送出、停止の同期 |
+| 5 | 二重発報の dedupe（イベント ID）とアラーム停止のサーバ通知 |
+| 6 | プライバシー: 同意 UI、保存期間・削除手段、README と Info.plist の文言更新、プライバシーラベル |
 
 ---
 
@@ -536,10 +556,141 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 | 6 | iPhone の背景アドバタイズ | オーバーフロー領域の挙動は端末・OS 版で差がある。接続維持で回避する設計にしているが要実測 |
 | 7 | 電池影響 | BLE 接続維持は安価だが、GPS 単発測位と通知連投は重い。1 日あたりの実測が必要 |
 | 8 | プライバシー表示 | 位置情報の取得目的を Info.plist と App Store のプライバシー項目に正しく記載する（現状 README は「位置情報は使わない」と明記しているため、方式2 採用時は文言の更新が必要） |
+| 9 | WatchConnectivity のセルラー越え | 公式ドキュメントは「in range」としか書かず、インターネット越しの中継可否を明記していない。**近接前提とみなし、離れた後の同期経路として当てにしない**（§11.5、要実機検証） |
+| 10 | A-GPS による測位差 | セルラー機は常時ネットワークがあるため初回測位（TTFF）や屋内フォールバックで有利になりうるが、公式な言及はない。実測が必要 |
+| 11 | サイレントプッシュの配信保証 | `apns-push-type: background` はシステムにスロットリングされ配信が保証されない。**アラーム発報には alert 型を使う**（§11.4） |
 
 ---
 
-## 11. 参考資料
+## 11. Apple Watch が GPS + Cellular モデルの場合
+
+結論から言うと、**方式1・方式2 の設計そのものは変わらない**。変わるのは
+「§1 で存在しないと結論した iPhone → Watch の通知経路が、サーバを介して復活する」ことで、
+これがローカル版の弱点をほぼ全部埋める。ただし代償としてサーバ基盤とプライバシー方針の
+変更が乗るため、置き換えではなく**上乗せ**として扱うべき。
+
+### 11.1 変わらないもの
+
+| 項目 | セルラー機での扱い |
+|---|---|
+| BLE の背景起床予算（5 回/24h、Series 6+、watchOS 9+） | **変わらない**。CoreBluetooth の制約でありセルラーとは無関係 |
+| BLE 切断の検知速度（supervision timeout 数秒） | 変わらない |
+| watchOS にジオフェンス／大幅位置変更 API が無いこと | **変わらない**（端末単体では依然として位置で起床できない） |
+| `WKExtendedRuntimeSession` の制約（前面で開始、種別ごとの時間上限） | 変わらない。§7 の多段アラームはそのまま必要 |
+| Critical Alerts entitlement の申請要否 | 変わらない |
+| **GPS の測位精度** | **変わらない。** GPS モデルも GPS + Cellular モデルも同じ GPS/GNSS チップを内蔵している。「GPS モデルは位置が測れない」わけではない（Series 8 / SE 第2世代 / Ultra 以降は iPhone が近くにあっても内蔵 GPS を使う） |
+
+つまり **§6 の二段トリガと §7 の多段アラームは、モデルに関わらず実装する必要がある。**
+
+### 11.2 変わるもの：サーバ中継という第3の経路
+
+watchOS 6 以降の独立 watch アプリは、**iPhone とは別の APNs デバイストークン**を持ち、
+iPhone と切断されていても自前の回線（セルラー／Wi-Fi）で**直接プッシュを受け取れる**。
+APNs のヘッダは `apns-topic` に watch アプリの bundle ID、`apns-push-type` に
+`alert`（可視通知）または `background`（サイレント）を指定する。
+iPhone と未接続の状態でも配信遅延は iPhone と同等（1 秒未満）という報告がある。
+
+```mermaid
+sequenceDiagram
+    participant P as iPhone (スリープ)
+    participant S as サーバ
+    participant A as APNs
+    participant W as Apple Watch (LTE/Wi-Fi)
+
+    P->>S: 大幅位置変更で起床 → 位置を送信（数分粒度）
+    W->>S: Watch の位置を低頻度で送信（電池優先）
+    S->>S: 距離 > しきい値 を判定（＝サーバ側ジオフェンス）
+    S->>A: alert push（apns-topic = watch アプリの bundle ID）
+    A->>W: BLE も iPhone も介さず直接配信
+    W->>W: アラーム開始 →（前面化後）Extended Runtime でハプティクス継続
+```
+
+これで埋まるローカル版の弱点：
+
+| ローカル版の弱点 | サーバ中継で | 補足 |
+|---|---|---|
+| 背景 BLE 起床が 24h で 5 回まで | **解消** | プッシュは CoreBluetooth の予算とは無関係 |
+| watchOS にジオフェンスが無い（§2.2） | **実質解消** | 判定をサーバに置き、結果をプッシュで通知すればよい |
+| 「最後に報告された位置」が古くなる | **改善** | 切断後も iPhone は大幅位置変更で更新を上げ続けられる。§4.2 の `maxAge` 問題が小さくなる |
+| Watch アプリが起きていないと検知できない | **解消** | プッシュはアプリ未起動でも届く |
+| iPhone を kill された／電池切れ | **改善** | サーバがハートビート途絶として検知できる |
+| ローカル通知 64 件上限で 4〜5 分で鳴り止む（§7 段階2） | **改善** | サーバから追い打ちのプッシュを送り続けられる |
+| 「離れた」と「Bluetooth が切れただけ」の区別 | **改善** | 実座標での判定になるため誤検知が減る |
+
+さらに逆方向の機能も作れる：Watch → サーバ → iPhone へサイレントプッシュを送り、
+**置き忘れた iPhone に音を鳴らさせる／最新位置を返させる**（「iPhone を探す」相当）。
+これはローカル完結版では原理的に不可能だった機能。
+
+### 11.3 それでもセルラー前提にできない理由
+
+1. **契約が要る。** Apple Watch のセルラーは iPhone と同一キャリアのプラン契約が前提で、
+   全ユーザが持っているとは限らない。→ **ローカル完結版が本線、サーバ版はオプション。**
+2. **電池。** LTE 接続は BLE と比べて桁違いに電力を食う。GPS + LTE のワークアウトで実測 6 時間
+   程度（Apple Watch Ultra 3 で最大 14 時間）。**常時 LTE で見守る設計は非現実的**で、
+   イベント発生時だけ回線を使う設計にする必要がある。Wi-Fi 圏内では Wi-Fi を優先する。
+3. **圏外。** 地下・山間部・ローミング不可の海外では機能しない。むしろそういう場所こそ
+   BLE のローカル検知の方が確実に動く。
+4. **プライバシーが最大のコスト。** 位置情報を外部サーバへ継続送信することになる。
+   現行 README とInfo.plist の「外部送信は行いません」という記述は**書き換えが必要**で、
+   App Store のプライバシーラベル、同意 UI、保存期間、削除手段の設計が必須になる。
+   技術的難易度よりこちらの方が重い。
+5. **可用性。** 「鳴らないと意味がない」アプリなので、サーバは実質 SLA を負うことになる。
+   サーバが落ちてもローカル検知だけで最低限動く構成にしておくこと。
+6. **サイレントプッシュは配信保証がない。** `apns-push-type: background` はシステムに
+   スロットリングされる。アラームの発報には必ず `alert` 型を使う。
+
+### 11.4 セルラーを活かす場合の設計差分
+
+**Tier 構成にする**（モデルや契約状況で機能が段階的に増える形）：
+
+| Tier | 前提 | 内容 |
+|---|---|---|
+| Tier 0（必須・全モデル） | なし | §6 のローカル二段トリガ。BLE 切断 → 猶予 → GPS 距離で確証 → §7 の多段アラーム |
+| Tier 1（ネットワークがあるとき） | セルラー機、**または Wi-Fi 圏内の GPS 機** | サーバへ位置を送信、サーバ側で距離判定、alert push で発報。ローカル検知の冗長系 |
+| Tier 2（任意） | Tier 1 + iPhone 側 | Watch → サーバ → iPhone のサイレントプッシュで「iPhone を探す」 |
+
+> Tier 1 を「セルラー限定機能」として実装しないこと。**GPS モデルでも自宅・職場など
+> 既知の Wi-Fi 圏内なら同じ経路が使える**ので、「ネットワークに繋がっていれば有効」という
+> 条件で実装するのが正しい。
+
+実装上の注意：
+
+- **二重発報の抑止。** ローカル検知とサーバ検知が同時に鳴る。イベント ID（例：切断時刻を
+  丸めたキー）で dedupe し、先に鳴った方を優先する。
+- **停止の同期。** ユーザが Watch で「停止」したら、サーバへも stop を送って追い打ちの
+  プッシュを止める。オフラインなら受信側で ID を見て捨てる。
+- **鳴らし続ける経路の合成。** ローカル通知の連投（§7 段階2）＋サーバからの追い打ち
+  プッシュ＋前面化後の Extended Runtime。どれか 1 つでも生き残れば鳴り続ける冗長構成にする。
+- **回線の使い方。** 平常時は送信しない／低頻度。Suspect 状態（§6）に入ってから初めて
+  Watch の位置をサーバへ送る。常時アップロードは電池を焼く。
+- **`WKURLSessionRefreshBackgroundTask`** を `AppDelegate.handle(_:)` に追加する。
+  background configuration の `URLSession` が完了するとこのタスクで起こされるので、
+  背景での送受信はこれに乗せる。
+
+### 11.5 細かい差分
+
+- **WatchConnectivity はセルラーでは救われない。** `WCSession` は「in range」＝ Bluetooth ／
+  同一 Wi-Fi の近接を前提としており、インターネット越しの中継は公式にも謳われていない。
+  **離れた後の iPhone ⇔ Watch 同期はサーバ経由しか無い**と考えるべき（§10-9、要実機検証）。
+- **測位の補助データ。** セルラー機は常時ネットワークを持てるため、A-GPS の補助データ取得や
+  Wi-Fi／基地局測位のフォールバックが効きやすく、初回測位が速くなる可能性がある。
+  ただし公式な言及はなく、§4.3 で挙げた「屋内で測位できない」問題が消えるわけではない。
+- **セルラー機でも BLE 側の実装は削れない。** 圏外・電池・契約のどれか 1 つ欠けただけで
+  サーバ経路は死ぬ。BLE 切断検知は最後の砦として残す。
+
+### 11.6 まとめ
+
+| 問い | 答え |
+|---|---|
+| 方式1（BLE 切断）の設計は変わるか | **変わらない** |
+| 方式2（GPS 距離）の設計は変わるか | 判定ロジックは変わらないが、**位置の鮮度と起床手段が大幅に改善する** |
+| 「§1 の結論（Watch 側で完結させるしかない）」は覆るか | **ローカル経路については覆らない。** ただしサーバを挟めば iPhone 発の発報が可能になる |
+| 「止めるまで鳴らす」（§7）は楽になるか | 楽になる（追い打ちプッシュ）が、**Extended Runtime を含む多段構成は依然必要** |
+| セルラー前提で作り直すべきか | **すべきでない。** ローカル完結版を Tier 0 として維持し、ネットワークがあるときだけ Tier 1 を上乗せする |
+
+---
+
+## 12. 参考資料
 
 - [Get timely alerts from Bluetooth devices on watchOS — WWDC22](https://developer.apple.com/videos/play/wwdc2022/10135/)
 - [Connect Bluetooth devices to Apple Watch — WWDC21](https://developer.apple.com/videos/play/wwdc2021/10005/)
@@ -552,3 +703,8 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 - [CLLocationManager.startMonitoring(for:)](https://developer.apple.com/documentation/corelocation/cllocationmanager/startmonitoring(for:))（watchOS 非対応）
 - [CLLocationManager.startUpdatingLocation()](https://developer.apple.com/documentation/corelocation/cllocationmanager/startupdatinglocation())（watchOS 3.0+）
 - [CLMonitor は watchOS 非対応 — Apple Developer Forums](https://developer.apple.com/forums/thread/731517)
+- [Creating Independent Watch Apps — WWDC19 Session 208](https://developer.apple.com/videos/play/wwdc2019/208/)
+- [WKURLSessionRefreshBackgroundTask](https://developer.apple.com/documentation/watchkit/wkurlsessionrefreshbackgroundtask)
+- [WCSession.isReachable](https://developer.apple.com/documentation/watchconnectivity/wcsession/isreachable)
+- [Apple Watch でセルラー通信を設定して使う — Apple サポート](https://support.apple.com/guide/watch/apd9a168c68b/watchos)
+- [Apple Watch — バッテリー](https://www.apple.com/watch/battery/)
