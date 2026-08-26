@@ -48,6 +48,12 @@ turetette/
 - 手動で「停止」ボタンを押すまで継続
 - 全画面アラーム表示(赤背景 + 停止ボタン)
 
+## 設計ドキュメント
+
+| ドキュメント | 内容 |
+|---|---|
+| [docs/watch-alarm-design.md](docs/watch-alarm-design.md) | iPhone スリープ中に Apple Watch へ通知し、ユーザが止めるまでアラームを鳴らす方式の検討（BLE 切断検知 / GPS 距離比較） |
+
 ## 開発環境
 
 | 項目 | 内容 |
