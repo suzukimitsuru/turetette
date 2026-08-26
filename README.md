@@ -52,7 +52,9 @@ turetette/
 
 | ドキュメント | 内容 |
 |---|---|
-| [docs/watch-alarm-design.md](docs/watch-alarm-design.md) | iPhone スリープ中に Apple Watch へ通知し、ユーザが止めるまでアラームを鳴らす方式の検討（BLE 切断検知 / GPS 距離比較） |
+| [docs/watch-alarm-design.md](docs/watch-alarm-design.md) | iPhone スリープ中に Apple Watch へ通知し、ユーザが止めるまでアラームを鳴らす方式の検討（BLE 切断検知 / GPS 距離比較 / GPS 方式の欠点 §12 / 移動開始で検出モードへ移る仕様 §13 / 歩行距離による遡及検出 §14 / iPhone 側のジオフェンスによる盗難検知 §15 / AirTag が使えない理由 §16） |
+| [docs/implementation-plan.md](docs/implementation-plan.md) | 上記の検討から起こした実装計画（フェーズ G0〜P7、完了条件、検証ゲート） |
+| [docs/roadmap.html](docs/roadmap.html) | ロードマップと現在位置（ブラウザで開く。進捗はファイル冒頭の `PLAN` で管理） |
 
 ## 開発環境
 

@@ -1,0 +1,971 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Turetette 実装ロードマップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+
+<style>
+:root {
+  --ground:      #EDF2F2;
+  --surface:     #FFFFFF;
+  --surface-2:   #F5F9F9;
+  --ink:         #0E1A1A;
+  --ink-2:       #334746;
+  --muted:       #5E706F;
+  --faint:       #8A9998;
+  --line:        #D2DDDC;
+  --line-soft:   #E3EBEA;
+  --signal:      #00857E;
+  --signal-dim:  #00857E22;
+  --done:        #587845;
+  --done-dim:    #58784520;
+  --alarm:       #BE3F2A;
+  --alarm-dim:   #BE3F2A1A;
+  --warn:        #96660D;
+  --warn-dim:    #96660D1A;
+
+  --f-display: "Archivo", "Noto Sans JP", system-ui, sans-serif;
+  --f-body:    "Noto Sans JP", system-ui, -apple-system, sans-serif;
+  --f-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:     #0B1211;
+    --surface:    #131C1B;
+    --surface-2:  #182322;
+    --ink:        #E3EDEC;
+    --ink-2:      #BDCCCA;
+    --muted:      #8A9C9A;
+    --faint:      #667878;
+    --line:       #223130;
+    --line-soft:  #1B2726;
+    --signal:     #31D6C7;
+    --signal-dim: #31D6C722;
+    --done:       #8FBA76;
+    --done-dim:   #8FBA7620;
+    --alarm:      #F0765E;
+    --alarm-dim:  #F0765E1F;
+    --warn:       #DFAE4E;
+    --warn-dim:   #DFAE4E1F;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:     #0B1211;
+  --surface:    #131C1B;
+  --surface-2:  #182322;
+  --ink:        #E3EDEC;
+  --ink-2:      #BDCCCA;
+  --muted:      #8A9C9A;
+  --faint:      #667878;
+  --line:       #223130;
+  --line-soft:  #1B2726;
+  --signal:     #31D6C7;
+  --signal-dim: #31D6C722;
+  --done:       #8FBA76;
+  --done-dim:   #8FBA7620;
+  --alarm:      #F0765E;
+  --alarm-dim:  #F0765E1F;
+  --warn:       #DFAE4E;
+  --warn-dim:   #DFAE4E1F;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0 1.25rem 5rem;
+}
+
+/* ── ヘッダ ───────────────────────────── */
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--ground) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.masthead-inner {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.25rem;
+}
+
+.brand {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.brand span { color: var(--signal); }
+
+.masthead-meta {
+  margin-left: auto;
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  letter-spacing: 0.02em;
+}
+
+.meter-strip {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 0 1.25rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.meter {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter > i {
+  display: block;
+  height: 100%;
+  background: var(--signal);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.meter-num {
+  font-family: var(--f-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── 現在地カード ─────────────────────── */
+
+.now {
+  margin: 2rem 0 0;
+  padding: 1.15rem 1.35rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--signal);
+  border-radius: 4px;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.now-label {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--signal);
+  font-weight: 500;
+}
+
+.now-title {
+  font-family: var(--f-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.now-next {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.15rem 0 0;
+}
+
+.now-next b { color: var(--ink-2); font-weight: 500; }
+
+/* ── 前提条件 ─────────────────────────── */
+
+.prereq {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--warn-dim);
+  border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+  border-radius: 4px;
+}
+
+.prereq h2 {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--warn);
+  font-weight: 500;
+  margin: 0 0 0.5rem;
+}
+
+.prereq ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.2rem; }
+.prereq li { font-size: 0.875rem; color: var(--ink-2); }
+.prereq b { color: var(--ink); font-weight: 700; }
+
+/* ── 凡例 ─────────────────────────────── */
+
+.legend {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.15rem;
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.swatch {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1.5px solid var(--faint);
+  flex: none;
+}
+.swatch.done { background: var(--done); border-color: var(--done); }
+.swatch.wip  { background: var(--signal); border-color: var(--signal); }
+.swatch.todo { background: transparent; }
+.swatch.skip { background: transparent; border-style: dashed; }
+
+/* ── レール ───────────────────────────── */
+
+.track { margin-top: 2.5rem; display: grid; gap: 0; }
+
+.node {
+  display: grid;
+  grid-template-columns: 2.75rem 1fr;
+  column-gap: 1rem;
+}
+
+.rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+/* 縦線 */
+.rail::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--line);
+}
+.node:first-child .rail::before { top: 1.9rem; }
+.node:last-child  .rail::before { bottom: calc(100% - 1.9rem); }
+.node[data-state="done"] .rail::before { background: var(--done); }
+.node[data-state="wip"]  .rail::before {
+  background: linear-gradient(var(--signal) 50%, var(--line) 50%);
+}
+.node[data-branch="1"] .rail::before {
+  background: none;
+  background-image: repeating-linear-gradient(
+    to bottom, var(--line) 0 5px, transparent 5px 10px);
+}
+
+/* ノードのマーカー */
+.pip {
+  position: relative;
+  margin-top: 1.55rem;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: var(--ground);
+  border: 2px solid var(--line);
+  flex: none;
+}
+.node[data-state="done"] .pip { background: var(--done); border-color: var(--done); }
+.node[data-state="wip"]  .pip { background: var(--signal); border-color: var(--signal); }
+.node[data-state="wip"]  .pip::after {
+  content: "";
+  position: absolute; inset: -6px;
+  border: 2px solid var(--signal);
+  border-radius: 50%;
+  opacity: 0.35;
+  animation: ping 2.4s ease-out infinite;
+}
+@keyframes ping {
+  0%   { transform: scale(0.7); opacity: 0.55; }
+  70%  { transform: scale(1.25); opacity: 0; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node[data-state="wip"] .pip::after { animation: none; opacity: 0.35; }
+  .meter > i { transition: none; }
+}
+
+.node[data-kind="gate"] .pip {
+  border-radius: 2px;
+  transform: rotate(45deg);
+  border-color: var(--warn);
+  background: var(--ground);
+}
+.node[data-kind="gate"][data-state="done"] .pip { background: var(--warn); }
+
+.node[data-branch="1"] .pip { border-style: dashed; }
+
+/* ── フェーズカード ───────────────────── */
+
+.card {
+  margin-bottom: 0.9rem;
+  padding: 1.1rem 1.25rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.node[data-kind="gate"] .card {
+  background: var(--warn-dim);
+  border-color: color-mix(in srgb, var(--warn) 30%, transparent);
+}
+
+.node[data-branch="1"] .card {
+  background: var(--surface-2);
+  border-style: dashed;
+}
+
+.node[data-state="wip"] > .card {
+  border-color: color-mix(in srgb, var(--signal) 45%, transparent);
+  box-shadow: 0 0 0 3px var(--signal-dim);
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.7rem;
+}
+
+.pid {
+  font-family: var(--f-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--signal);
+  flex: none;
+}
+.node[data-kind="gate"] .pid { color: var(--warn); }
+.node[data-state="done"] .pid { color: var(--done); }
+.node[data-branch="1"] .pid { color: var(--faint); }
+
+.ptitle {
+  font-family: var(--f-display);
+  font-size: 1.13rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.chip {
+  margin-left: auto;
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.16rem 0.5rem;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  flex: none;
+}
+.chip.done { color: var(--done); background: var(--done-dim); }
+.chip.wip  { color: var(--signal); background: var(--signal-dim); }
+.chip.todo { color: var(--faint); }
+.chip.skip { color: var(--faint); border-style: dashed; }
+
+.goal {
+  margin: 0.55rem 0 0;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+
+.goal b { color: var(--ink); font-weight: 700; }
+
+.pmeter {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.pmeter .meter { height: 3px; }
+.pmeter .meter > i { background: var(--done); }
+.node[data-state="wip"] .pmeter .meter > i { background: var(--signal); }
+.pmeter .meter-num { font-size: 0.68rem; }
+
+/* ── タスク一覧 ───────────────────────── */
+
+.tasks {
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line-soft);
+}
+
+.task {
+  display: grid;
+  grid-template-columns: 1rem 3.6rem 1fr;
+  column-gap: 0.6rem;
+  align-items: start;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.task:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.dot {
+  margin-top: 0.5rem;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--faint);
+  background: transparent;
+}
+.task[data-s="done"] .dot { background: var(--done); border-color: var(--done); }
+.task[data-s="wip"]  .dot { background: var(--signal); border-color: var(--signal); }
+.task[data-s="skip"] .dot { border-style: dashed; }
+
+.tid {
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.12rem;
+}
+.task[data-s="done"] .tid { color: var(--done); }
+.task[data-s="wip"]  .tid { color: var(--signal); }
+
+.tbody { min-width: 0; }
+
+.ttext {
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+.task[data-s="done"] .ttext { color: var(--muted); }
+.task[data-s="skip"] .ttext { color: var(--faint); }
+.ttext b { color: var(--ink); font-weight: 700; }
+
+.tmeta {
+  margin-top: 0.15rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.5rem;
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: var(--faint);
+}
+
+.tgt {
+  padding: 0.02rem 0.36rem;
+  border-radius: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--muted);
+}
+.node[data-branch="1"] .tgt { background: var(--surface); }
+
+.ref { color: var(--faint); }
+
+/* ── 判定表 ───────────────────────────── */
+
+.rulebox {
+  margin-top: 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  overflow-x: auto;
+}
+
+.rulebox table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  min-width: 26rem;
+}
+
+.rulebox caption {
+  caption-side: top;
+  text-align: left;
+  padding: 0.55rem 0.75rem 0.4rem;
+  font-family: var(--f-mono);
+  font-size: 0.67rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.rulebox th, .rulebox td {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-2);
+  vertical-align: top;
+}
+.rulebox th {
+  font-family: var(--f-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.rulebox tr:last-child td, .rulebox tr:last-child th { border-bottom: 0; }
+.rulebox td.v { font-family: var(--f-mono); font-size: 0.72rem; white-space: nowrap; }
+.rulebox td.fire { color: var(--alarm); font-weight: 500; }
+.rulebox td.hold { color: var(--done); font-weight: 500; }
+.rulebox td.weak { color: var(--muted); }
+
+/* ── 完了条件 ─────────────────────────── */
+
+.dod {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface-2);
+  border-radius: 3px;
+  border-left: 2px solid var(--line);
+}
+.dod h4 {
+  margin: 0 0 0.35rem;
+  font-family: var(--f-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 500;
+}
+.dod ul { margin: 0; padding-left: 1.05rem; display: grid; gap: 0.15rem; }
+.dod li { font-size: 0.82rem; color: var(--ink-2); }
+
+/* ── フッタ ───────────────────────────── */
+
+.foot {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.3rem;
+}
+.foot a { color: var(--signal); text-decoration: none; border-bottom: 1px solid var(--signal-dim); }
+.foot a:hover, .foot a:focus-visible { border-bottom-color: var(--signal); }
+.foot code {
+  font-family: var(--f-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  padding: 0.05rem 0.3rem;
+}
+
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+@media (max-width: 34rem) {
+  .node { grid-template-columns: 1.75rem 1fr; column-gap: 0.6rem; }
+  .task { grid-template-columns: 1rem 1fr; }
+  .task .tid { grid-column: 2; margin-bottom: -0.2rem; }
+  .task .tbody { grid-column: 2; }
+  .now-title { font-size: 1.25rem; }
+}
+</style>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <h1 class="brand">Turetette <span>実装ロードマップ</span></h1>
+    <div class="masthead-meta" id="updated"></div>
+  </div>
+  <div class="meter-strip">
+    <div class="meter"><i id="overall-bar" style="width:0"></i></div>
+    <div class="meter-num" id="overall-num"></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="now">
+    <div class="now-label">現在地</div>
+    <h2 class="now-title" id="now-title"></h2>
+    <p class="now-next" id="now-next"></p>
+  </section>
+
+  <section class="prereq">
+    <h2>前提条件 — 満たせないと成立しない</h2>
+    <ul>
+      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）</li>
+      <li><b>実機での検証</b> — 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない（§10-1）</li>
+      <li><b>文字盤にコンプリケーションを置いてもらう</b> — 無いと背景更新が 1 時間に 1 回まで落ちる（§14.10）</li>
+      <li>iPhone 側は位置情報「常に許可」 — ジオフェンス盗難検知の前提（§15.3）</li>
+    </ul>
+  </section>
+
+  <div class="legend">
+    <span><i class="swatch done"></i>完了</span>
+    <span><i class="swatch wip"></i>着手中</span>
+    <span><i class="swatch todo"></i>未着手</span>
+    <span><i class="swatch skip"></i>任意 / 見送り</span>
+    <span>◇ 検証ゲート</span>
+    <span>破線カード = 任意の枝</span>
+  </div>
+
+  <div class="track" id="track"></div>
+
+  <footer class="foot">
+    <div>設計: <a href="watch-alarm-design.md">docs/watch-alarm-design.md</a> ／ 計画: <a href="implementation-plan.md">docs/implementation-plan.md</a></div>
+    <div>更新方法: このファイル冒頭の <code>PLAN</code> でタスクの <code>s</code> を <code>todo</code> / <code>wip</code> / <code>done</code> / <code>skip</code> に書き換え、<code>CURRENT</code> と <code>UPDATED</code> を合わせる。進捗率と現在地は自動計算。</div>
+  </footer>
+
+</main>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   進捗はここだけを書き換える
+   s: "todo" 未着手 / "wip" 着手中 / "done" 完了 / "skip" 見送り
+   ══════════════════════════════════════════════════════════════ */
+
+const UPDATED = "2026-08-26";
+const CURRENT = "G0";              // 現在着手中（またはこれから着手する）フェーズ ID
+
+const PLAN = [
+  {
+    id: "D", kind: "main", title: "設計検討",
+    goal: "watchOS の実制約に照らして方式を決める。<b>結論: 検知も発報も Watch 側、距離判定の主役は GPS ではなく歩行距離。</b>",
+    tasks: [
+      { id: "D1", s: "done", t: "BLE 切断 / GPS 距離の 2 方式と多段アラームの検討", ref: "§1–§11" },
+      { id: "D2", s: "done", t: "GPS 距離方式の欠点と検討事項（suppress-only 方針の確立）", ref: "§12" },
+      { id: "D3", s: "done", t: "移動開始で検出モードへ移る仕様（L0/L1/L2 と遅延発報）", ref: "§13" },
+      { id: "D4", s: "done", t: "歩行距離による遡及検出 / iPhone 側の起床手段 / AirTag 調査", ref: "§14–§16" }
+    ]
+  },
+  {
+    id: "G0", kind: "gate", title: "実機スパイク — 使い捨て",
+    goal: "後続の設計を左右する 3 つの未知を、実装前に潰す。<b>ここが外れると P2 / P3 を作り直すことになる。</b>",
+    tasks: [
+      { id: "G0-1", s: "todo", t: "背景 BLE 起床（<code>bluetooth-central</code> + notify）が実際に来るか", ref: "§2.1" },
+      { id: "G0-2", s: "todo", t: "<b>5 回/24h の予算が <code>didDisconnect</code> 起床も数えるか</b>", ref: "§10-2" },
+      { id: "G0-3", s: "todo", t: "背景起床 1 回の実行枠で歩数・活動の遡り問い合わせが返るか", ref: "§14.4" }
+    ],
+    dod: ["3 項目の実測値が記録され、P2 / P3 の設計に反映されている"]
+  },
+  {
+    id: "P0", kind: "main", title: "地固め — 既存コードの修正",
+    goal: "いま動いているものを正しい土台にする。<b>新機能は足さない。</b>",
+    tasks: [
+      { id: "P0-1", s: "todo", t: "<code>WKBackgroundModes</code> の無効値 <code>self-contained</code> を除去", tgt: "Info.plist", ref: "§9-1" },
+      { id: "P0-2", s: "todo", t: "<b>「切断している」と「離れている」をフラグとして分離</b>（現状は後者が常に false）", tgt: "BLEManager", ref: "§9-2" },
+      { id: "P0-3", s: "todo", t: "サービス UUID を定義し <code>scanForPeripherals(withServices:)</code> へ", tgt: "BLEManager", ref: "§9-3" },
+      { id: "P0-4", s: "todo", t: "復帰時の再接続を <code>retrievePeripherals(withIdentifiers:)</code> ベースに", tgt: "BLEManager", ref: "§9-3" },
+      { id: "P0-5", s: "todo", t: "RSSI の移動中央値フィルタ + ヒステリシス（出 2.5m / 復帰 1.5m）", tgt: "BLEManager", ref: "§9-5" },
+      { id: "P0-6", s: "todo", t: "1 秒 <code>Timer</code> ポーリングを廃し、イベント駆動 + 適応間隔へ", tgt: "BLEManager", ref: "§9-4" },
+      { id: "P0-7", s: "todo", t: "アラーム状態の永続化（背景終了に耐える）", tgt: "AlarmManager", ref: "§9-7" },
+      { id: "P0-8", s: "todo", t: "発火ロジックを View から剥がす下準備（通知経路の整理）", tgt: "ContentView", ref: "§9-8" }
+    ],
+    dod: [
+      "背景 RSSI チェックの未接続分岐が実際に発火する",
+      "2m 付近を往復しても圏外判定が振動しない（実機）",
+      "背景でアプリを終了させても、再起動でアラーム状態が復元される"
+    ]
+  },
+  {
+    id: "P1", kind: "main", title: "止めるまで鳴るアラーム",
+    goal: "README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。<b>現行実装は画面が消えた瞬間に鳴り止む。ここが製品の核。</b>",
+    tasks: [
+      { id: "P1-1", s: "todo", t: "<code>UNNotificationCategory</code> と「停止」アクションの登録", tgt: "AlarmManager", ref: "§2.4" },
+      { id: "P1-2", s: "todo", t: "<b>通知の連投</b>（5 秒間隔 × 48 発、<code>threadIdentifier</code> で束ねる）", tgt: "AlarmManager", ref: "§7 段階2" },
+      { id: "P1-3", s: "todo", t: "<b>全 ID の一括キャンセル</b>（pending と delivered の両方）", tgt: "AlarmManager", ref: "§7" },
+      { id: "P1-4", s: "todo", t: "<code>interruptionLevel = .timeSensitive</code> と capability の付与", tgt: "entitlements", ref: "§2.4" },
+      { id: "P1-5", s: "todo", t: "<code>WKExtendedRuntimeSession</code> でハプティクス継続（前面で開始）", tgt: "AlarmManager", ref: "§7 段階3" },
+      { id: "P1-6", s: "todo", t: "背景終了 → 前面化でのアラーム継続", tgt: "AlarmManager", ref: "§9-7" },
+      { id: "P1-7", s: "todo", t: "停止導線と状態表示の整理", tgt: "AlarmView", ref: "—" },
+      { id: "P1-8", s: "skip", t: "Critical Alerts entitlement の申請（承認前提にしない）", ref: "§7 段階0" }
+    ],
+    dod: [
+      "画面を消したまま 4 分以上鳴り続ける",
+      "「停止」を押すと通知センターに 1 件も残らない",
+      "通知タップ → 前面化 → 停止するまで無限にハプティクスが続く"
+    ]
+  },
+  {
+    id: "P2", kind: "main", title: "状態機械 — 二段トリガの骨格",
+    goal: "判定を 1 か所に集め、誤検知の抑制と背景予算の管理を入れる。",
+    tasks: [
+      { id: "P2-1", s: "todo", t: "<b><code>ProximityCoordinator</code> 新規</b> — Idle / Guarding / Suspect / Confirming / Alarming", tgt: "新規", ref: "§6" },
+      { id: "P2-2", s: "todo", t: "猶予タイマーと再接続試行（遮蔽による誤検知の吸収）", tgt: "ProximityCoordinator", ref: "§3.2" },
+      { id: "P2-3", s: "todo", t: "背景予算の監視（<code>LeGattNear/Exceeded…</code>）と枯渇時の縮退", tgt: "BLEManager", ref: "§6" },
+      { id: "P2-4", s: "todo", t: "<code>handle(_:)</code> の分岐整理 + WatchConnectivity タスク分岐を追加", tgt: "AppDelegate", ref: "§8-10" },
+      { id: "P2-5", s: "todo", t: "<code>ContentView</code> を表示専用にする", tgt: "ContentView", ref: "§9-8" },
+      { id: "P2-6", s: "todo", t: "しきい値（距離・猶予秒数）の設定画面", tgt: "Views", ref: "§8-14" }
+    ],
+    dod: [
+      "遮蔽で数秒切れても鳴らない（猶予で吸収）",
+      "再接続不能が猶予を超えたら Confirming に入る",
+      "予算枯渇が UI に出る"
+    ]
+  },
+  {
+    id: "P3", kind: "main", title: "遡及検出 — 歩行距離による判定",
+    goal: "設計上いちばん効く部分。<b>GPS を使わずに「離れた」を判定する。</b>経路長は変位の上界なので、「短い ⟹ 近い」は方向に依らず厳密に成立する。",
+    tasks: [
+      { id: "P3-1", s: "todo", t: "<code>GuardState</code> の永続化（<code>lastSeenAt</code> ほか）、書き込みは 60 秒間引き", tgt: "新規", ref: "§14.2" },
+      { id: "P3-2", s: "todo", t: "<b><code>MotionManager</code> 改修</b> — confidence / automotive / unknown の状態維持 / debounce / 権限監視", tgt: "MotionManager", ref: "§13.14" },
+      { id: "P3-3", s: "todo", t: "<b><code>retrospectiveCheck</code> 決定表</b>（下表）", tgt: "ProximityCoordinator", ref: "§14.5" },
+      { id: "P3-4", s: "todo", t: "<code>longestContinuousWalk</code>（連続歩行時間の算出）", tgt: "MotionManager", ref: "§14.6" },
+      { id: "P3-5", s: "todo", t: "監視レベル L0 / L1 / L2 と、レベル依存の猶予・進行中猶予の短縮", tgt: "ProximityCoordinator", ref: "§13.2" },
+      { id: "P3-6", s: "todo", t: "保留切断イベント（TTL 30 分）と<b>遅延発報</b>（机に置いて席を立つ）", tgt: "ProximityCoordinator", ref: "§13.8" },
+      { id: "P3-7", s: "todo", t: "背景更新の適応スケジューリングと再予約", tgt: "AppDelegate", ref: "§13.6" },
+      { id: "P3-8", s: "todo", t: "<b>コンプリケーションの提供</b>と「文字盤に追加してください」の案内 — 背景検知の前提条件", tgt: "新規", ref: "§14.10" },
+      { id: "P3-9", s: "todo", t: "歩行距離 / 階数が使えない機種での縮退", tgt: "MotionManager", ref: "§14.8" },
+      { id: "P3-10", s: "todo", t: "設定「静止中も鳴らす」", tgt: "Views", ref: "§13.8" },
+      { id: "P3-11", s: "skip", t: "<code>HKObserverQuery</code> の背景配信で歩数起床（同じ予算を共有）", tgt: "新規", ref: "§14.9" }
+    ],
+    rules: {
+      caption: "P3-3 判定 — 上から評価し、最初に当たったものを採る",
+      head: ["#", "条件", "判定"],
+      rows: [
+        ["1", "歩数データが取れない（権限なし / 未対応）", "判定不能 → 鳴る", "weak"],
+        ["2", "乗り物で移動した", "発報（強）", "fire"],
+        ["3", "経路長 ≥ 150m かつ 連続歩行 ≥ 60 秒", "発報（強）", "fire"],
+        ["4", "階移動あり かつ 経路長 ≥ 40m", "発報（中）", "fire"],
+        ["5", "経路長 &lt; 30m", "抑制", "hold"],
+        ["6", "上記以外（デッドバンド）", "弱い通知 1 発", "weak"]
+      ]
+    },
+    dod: [
+      "机に iPhone を置いて席を立つ → 鳴る（遅延発報を含む）",
+      "同じ部屋の中を 5 分歩き回る → 鳴らない",
+      "Motion & Fitness を拒否しても見逃しが増えない"
+    ]
+  },
+  {
+    id: "G1", kind: "gate", title: "検証ゲート — 実測で方針を決める",
+    goal: "<b>ここの結果で P5（GPS）の要否が決まる。</b>誤報が許容範囲なら GPS は実装しなくてよい。",
+    tasks: [
+      { id: "G1-1", s: "todo", t: "背景更新の実回数を、コンプリケーション有無で比較（1 日）", ref: "§14.10" },
+      { id: "G1-2", s: "todo", t: "遡り問い合わせが背景起床枠の中で返るか", ref: "§14.4" },
+      { id: "G1-3", s: "todo", t: "1 日あたりの電池消費", ref: "§10-7" },
+      { id: "G1-4", s: "todo", t: "<b>誤報・見逃しの実測（1 週間、端末内ログ）</b> → しきい値の調整", ref: "§12.4" }
+    ]
+  },
+  {
+    id: "P4", kind: "main", title: "iPhone コンパニオン — 盗難検知",
+    goal: "iPhone を守る対象にする。同時に、<b>Watch 側では原理的に検出できない「iPhone だけが動く」盗難</b>を拾う。",
+    tasks: [
+      { id: "P4-1", s: "todo", t: "iOS ターゲット新規作成。Bundle ID を <code>WKCompanionAppBundleIdentifier</code> と一致させる", ref: "§8" },
+      { id: "P4-2", s: "todo", t: "<code>CBPeripheralManager</code> — サービス公開、背景アドバタイズ、状態復元", ref: "§3.1" },
+      { id: "P4-3", s: "todo", t: "低頻度ハートビート notify（Watch の背景起床トリガ。高頻度は予算を焼く）", ref: "§3.1" },
+      { id: "P4-4", s: "todo", t: "位置 characteristic の read 対応（Watch から能動取得）", ref: "§4.1" },
+      { id: "P4-5", s: "todo", t: "大幅位置変更 + <code>transferUserInfo</code> で位置を push（静止フラグを同梱）", ref: "§12.4-D" },
+      { id: "P4-6", s: "todo", t: "<b>ジオフェンス盗難検知</b> — 「置かれた」判定 → 自分の周りに円を登録 → 出たら背景起床", ref: "§15.3" },
+      { id: "P4-7", s: "todo", t: "円の永続化 / <code>CLMonitor</code> と従来 API の実機比較", ref: "§15.3" },
+      { id: "P4-8", s: "todo", t: "<b>起床後の遡及判定 — 歩数 0 + 位置変化 = 盗難</b>", ref: "§15.4" },
+      { id: "P4-9", s: "todo", t: "Watch と BLE 接続中なら誤報を抑制（持ち主が一緒にいる証拠）", ref: "§15.3" },
+      { id: "P4-10", s: "todo", t: "「常に許可」のオンボーディングと、拒否時の縮退 UI", ref: "§15.3" },
+      { id: "P4-11", s: "skip", t: "<code>CMSensorRecorder</code> の可用性判定と振動履歴の取得（機種依存）", ref: "§15.4" }
+    ]
+  },
+  {
+    id: "P5", kind: "main", branch: true, title: "GPS 距離 — 方式2（任意）",
+    goal: "「Bluetooth が切れただけ」を黙らせるためだけに使う。<b>発報の根拠にはしない。</b>G1-4 の結果次第で不要になりうる。",
+    tasks: [
+      { id: "P5-1", s: "todo", t: "<code>LocationManager</code> 新規。単発測位と二段タイムアウト（背景 5–8 秒 / 前面 15–30 秒）", ref: "§12.4-C" },
+      { id: "P5-2", s: "todo", t: "<b>3 値判定（遠い / 近い / 判定不能）</b>と非対称マージン + デッドバンド。<code>Bool</code> で返さない", ref: "§12.4-A" },
+      { id: "P5-3", s: "todo", t: "<code>LastKnownFix</code> と動的な有効期限（iPhone が静止中なら 60 分 / 移動中なら 3 分）", ref: "§12.4-D" },
+      { id: "P5-4", s: "todo", t: "端末内の判定ログ（リングバッファ、外部送信なし）", ref: "§12.4-I" },
+      { id: "P5-5", s: "todo", t: "位置情報の用途説明を追加し、README の「位置情報は使わない」を書き換える", ref: "§12.3-16" }
+    ]
+  },
+  {
+    id: "P6", kind: "main", branch: true, title: "サーバ中継 — Tier 1（任意）",
+    goal: "ネットワークがあるときだけ効く冗長系。<b>ローカル完結版を置き換えない。</b>プライバシー方針の変更が技術的難易度より重い。",
+    tasks: [
+      { id: "P6-1", s: "todo", t: "Watch アプリの独立 APNs 登録", ref: "§11.2" },
+      { id: "P6-2", s: "todo", t: "<code>WKURLSessionRefreshBackgroundTask</code> 分岐を追加", ref: "§11.4" },
+      { id: "P6-3", s: "todo", t: "iPhone: 大幅位置変更で起床 → 背景 <code>URLSession</code> でサーバへ送信", ref: "§11.4" },
+      { id: "P6-4", s: "todo", t: "サーバ側の距離判定と <b>alert</b> push（サイレントは配信保証が無い）", ref: "§10-11" },
+      { id: "P6-5", s: "todo", t: "二重発報の dedupe と、停止のサーバ同期", ref: "§11.4" },
+      { id: "P6-6", s: "todo", t: "同意 UI、保存期間、削除手段、プライバシーラベル、README 文言", ref: "§11.3" }
+    ]
+  },
+  {
+    id: "P7", kind: "main", branch: true, title: "モーション付き BLE タグ（任意）",
+    goal: "<b>置き忘れと盗難を、距離もしきい値も無しに区別する。</b>タグ静止 × 自分移動 = 置き忘れ、タグ移動 × 自分静止 = 盗難。AirTag は識別子が回転するため使えない。",
+    tasks: [
+      { id: "P7-1", s: "todo", t: "タグ側の wake-on-motion 仕様策定（<b>立ち上がりで 1 回だけ notify</b>。連投は予算を焼く）", ref: "§16.5" },
+      { id: "P7-2", s: "todo", t: "タグ × Watch の 2×2 判定を <code>ProximityCoordinator</code> に組み込む", ref: "§16.5" }
+    ]
+  }
+];
+
+/* ══════════════════════════════════════════════════════════════
+   以下は描画。通常は触らない。
+   ══════════════════════════════════════════════════════════════ */
+
+const LABEL = { done: "完了", wip: "着手中", todo: "未着手", skip: "見送り" };
+
+function phaseState(p) {
+  const live = p.tasks.filter(t => t.s !== "skip");
+  if (live.length && live.every(t => t.s === "done")) return "done";
+  if (p.tasks.some(t => t.s === "wip") || p.id === CURRENT) return "wip";
+  return "todo";
+}
+
+function phaseProgress(p) {
+  const live = p.tasks.filter(t => t.s !== "skip");
+  if (!live.length) return { done: 0, total: 0, pct: 0 };
+  const done = live.filter(t => t.s === "done").length;
+  return { done, total: live.length, pct: Math.round((done / live.length) * 100) };
+}
+
+function el(tag, cls, html) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html != null) n.innerHTML = html;
+  return n;
+}
+
+function renderRules(r) {
+  const box = el("div", "rulebox");
+  const table = el("table");
+  const cap = el("caption", null, r.caption);
+  table.appendChild(cap);
+  const thead = el("thead");
+  const hr = el("tr");
+  r.head.forEach(h => hr.appendChild(el("th", null, h)));
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tb = el("tbody");
+  r.rows.forEach(([n, cond, verdict, tone]) => {
+    const tr = el("tr");
+    tr.appendChild(el("td", "v", n));
+    tr.appendChild(el("td", null, cond));
+    tr.appendChild(el("td", tone, verdict));
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  box.appendChild(table);
+  return box;
+}
+
+function renderPhase(p) {
+  const state = phaseState(p);
+  const prog = phaseProgress(p);
+
+  const node = el("div", "node");
+  node.dataset.state = state;
+  node.dataset.kind = p.kind;
+  if (p.branch) node.dataset.branch = "1";
+
+  const rail = el("div", "rail");
+  rail.appendChild(el("div", "pip"));
+  node.appendChild(rail);
+
+  const card = el("div", "card");
+
+  const head = el("div", "card-head");
+  head.appendChild(el("span", "pid", p.id));
+  head.appendChild(el("h3", "ptitle", p.title));
+  head.appendChild(el("span", "chip " + state, LABEL[state]));
+  card.appendChild(head);
+
+  if (p.goal) card.appendChild(el("p", "goal", p.goal));
+
+  if (prog.total) {
+    const pm = el("div", "pmeter");
+    const m = el("div", "meter");
+    const bar = el("i");
+    bar.style.width = prog.pct + "%";
+    m.appendChild(bar);
+    pm.appendChild(m);
+    pm.appendChild(el("div", "meter-num", prog.done + " / " + prog.total));
+    card.appendChild(pm);
+  }
+
+  const ul = el("ul", "tasks");
+  p.tasks.forEach(t => {
+    const li = el("li", "task");
+    li.dataset.s = t.s;
+    li.appendChild(el("i", "dot"));
+    li.appendChild(el("span", "tid", t.id));
+    const body = el("div", "tbody");
+    body.appendChild(el("div", "ttext", t.t));
+    if (t.tgt || t.ref) {
+      const meta = el("div", "tmeta");
+      if (t.tgt) meta.appendChild(el("span", "tgt", t.tgt));
+      if (t.ref) meta.appendChild(el("span", "ref", t.ref));
+      body.appendChild(meta);
+    }
+    li.appendChild(body);
+    ul.appendChild(li);
+  });
+  card.appendChild(ul);
+
+  if (p.rules) card.appendChild(renderRules(p.rules));
+
+  if (p.dod) {
+    const d = el("div", "dod");
+    d.appendChild(el("h4", null, "完了条件"));
+    const dul = el("ul");
+    p.dod.forEach(x => dul.appendChild(el("li", null, x)));
+    d.appendChild(dul);
+    card.appendChild(d);
+  }
+
+  node.appendChild(card);
+  return node;
+}
+
+(function render() {
+  const track = document.getElementById("track");
+  PLAN.forEach(p => track.appendChild(renderPhase(p)));
+
+  // 全体進捗は必須の枝（任意フェーズを除く）で計算する
+  const required = PLAN.filter(p => !p.branch);
+  let done = 0, total = 0;
+  required.forEach(p => {
+    const pr = phaseProgress(p);
+    done += pr.done;
+    total += pr.total;
+  });
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  document.getElementById("overall-bar").style.width = pct + "%";
+  document.getElementById("overall-num").textContent = done + " / " + total + " 必須タスク · " + pct + "%";
+  document.getElementById("updated").textContent = "更新 " + UPDATED;
+
+  const cur = PLAN.find(p => p.id === CURRENT);
+  const nextIdx = PLAN.findIndex(p => p.id === CURRENT) + 1;
+  const next = PLAN[nextIdx];
+  if (cur) {
+    const pr = phaseProgress(cur);
+    document.getElementById("now-title").innerHTML = cur.id + " · " + cur.title;
+    const firstTodo = cur.tasks.find(t => t.s === "todo" || t.s === "wip");
+    let line = "";
+    if (pr.total) line += "このフェーズ " + pr.done + " / " + pr.total + " 完了。";
+    if (firstTodo) line += "次にやること: <b>" + firstTodo.id + "</b> " + firstTodo.t.replace(/<\/?b>/g, "");
+    else if (next) line += "このフェーズは完了。次は <b>" + next.id + " " + next.title + "</b>";
+    document.getElementById("now-next").innerHTML = line;
+  }
+})();
+</script>
