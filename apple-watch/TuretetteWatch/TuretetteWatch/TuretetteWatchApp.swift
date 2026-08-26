@@ -14,10 +14,17 @@ struct TuretetteWatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(bleManager)
-                .environmentObject(motionManager)
-                .environmentObject(alarmManager)
+            // G0 スパイク中は計測画面を出す。`SpikeConfig.enabled` を false に戻すと本体に戻る。
+            // 計測が終わったら Spike/ ごと削除し、この分岐も消すこと。
+            if SpikeConfig.enabled {
+                SpikeView()
+                    .onAppear { SpikeRunner.shared.bootstrap() }
+            } else {
+                ContentView()
+                    .environmentObject(bleManager)
+                    .environmentObject(motionManager)
+                    .environmentObject(alarmManager)
+            }
         }
     }
 }
