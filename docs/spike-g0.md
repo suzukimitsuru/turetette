@@ -59,11 +59,114 @@ cd spike/peripheral-sim && swift run PeripheralSim
 ### 2-2. Watch 側
 
 `Spike/SpikeLog.swift` の `SpikeConfig.enabled` が `true` であることを確認し、実機へインストールします。
+**インストール手順は §2.5 を参照**（Apple Watch にはケーブルが無く、Wi-Fi 経由で入れます）。
 起動すると本体ではなく計測画面が出ます。画面は 3 タブ（状態 / 集計 / ログ）。
 
 初回起動時に **モーションと Bluetooth の許可**を求められるので、両方許可してください。
 `CMMotionActivityManager.authorizationStatus()` が「許可」になっていることを
 状態タブ下部で確認します。ここが「拒否」だと G0-3 が測れません。
+
+---
+
+## 2.5. Apple Watch へのインストール
+
+Apple Watch には Mac と繋ぐケーブルがありません。**Xcode から Wi-Fi 経由で直接インストールします**
+（watchOS 6 以降の独立アプリはこれが正規の方法）。iPhone を経由する必要はありません。
+
+### 前提
+
+| 条件 | 補足 |
+|---|---|
+| Apple Watch Series 6 以降 / watchOS 9 以降 | 背景 BLE 起床の動作要件 |
+| Watch が iPhone とペアリング済み | Watch 単体では Xcode に出てきません |
+| **Mac / iPhone / Watch が同じ Wi-Fi** | SSID だけでなく**バンド（2.4GHz / 5GHz）も揃える**こと。混在すると Xcode が Watch を見つけられません |
+| Xcode に Apple ID でサインイン済み | 無料の Apple ID（Personal Team）でも可。制限は下記 |
+
+### 手順
+
+**1. 署名チームを設定する**
+
+このプロジェクトは `DEVELOPMENT_TEAM` が未設定です（`CODE_SIGN_STYLE = Automatic` のみ）。
+Xcode で TuretetteWatch ターゲット → Signing & Capabilities → **Team** を選んでください。
+
+Bundle ID が他と衝突する場合は `PRODUCT_BUNDLE_IDENTIFIER` を
+`com.<自分の名前>.turetette.watch` などに変えます。
+
+**2. iPhone のデベロッパモードを有効にする**
+
+設定 → プライバシーとセキュリティ → デベロッパモード → オン → 再起動。
+
+**3. Apple Watch のデベロッパモードを有効にする**
+
+Watch の 設定 → プライバシーとセキュリティ → デベロッパモード → オン → 再起動 → 起動後にもう一度確認を求められるので承認。
+
+> **項目が出てこない場合**（よくあります）
+> iPhone をケーブルで Mac に繋ぎ、Xcode の Window → Devices and Simulators を開きます。
+> iPhone の下に Watch が現れ、Watch 側に「このコンピュータを信頼しますか」が出るので信頼します。
+> **その後で** Watch の設定を見るとデベロッパモードの項目が現れます。
+
+**4. Xcode に Watch を認識させる**
+
+Window → Devices and Simulators。iPhone の下に Watch が並びます。
+初回は「Preparing debugger support」でシンボルの準備が走ります。**数分〜十数分かかる**ので、
+消えるまで待ってください。この間に Run しても失敗します。
+
+**5. Run する**
+
+実行先を Apple Watch にして Run。初回インストールは遅いので、
+**Watch を充電器に載せ、画面を点けたまま、Mac の近くに置いて**ください。
+
+### このスパイク特有の注意 ★
+
+**(a) デバッガを繋いだままでは計測になりません**
+
+Xcode から Run するとデバッガが接続され、**アプリがサスペンドされません**。
+それでは「背景で起きたか」を測れず、G0 の3つの問い全部が無意味になります。
+
+インストール後は必ず **Xcode の Stop を押してデバッガを切り離し**、
+Watch 側でアプリを起動し直してから計測を始めてください。
+
+**(b) アプリを開くと BLE の背景予算がリセットされます**
+
+Xcode からの起動も同じです。**計測の開始点は「最後にアプリを閉じた時刻」**になります。
+インストール直後は一度アプリを開いて権限を許可し、フェーズを選び、
+それから閉じて放置を始めてください。
+
+**(c) バックグラウンド更新をオンにする**
+
+Watch の 設定 → 一般 → App のバックグラウンド更新 で、本アプリがオンになっていること。
+オフだと `WKApplicationRefreshBackgroundTask` が一切来ません。
+
+**(d) 無料 Apple ID を使う場合は7日で失効します**
+
+| 制限 | 値 |
+|---|---|
+| プロビジョニングプロファイルの有効期間 | **7 日** |
+| 同時に登録できる App ID | 10 個（各 7 日で失効） |
+| 登録できるテストデバイス | プラットフォームごとに 3 台 |
+
+フェーズ A と B は日をまたいで分けるので、**7 日以内に収まるよう計画してください**。
+失効するとアプリは黙って起動しなくなります。
+
+### インストールに失敗したときの確認順
+
+| 症状 | 対処 |
+|---|---|
+| Xcode に Watch が出てこない | Wi-Fi のバンドを揃える / iPhone をケーブルで繋いで Devices and Simulators を開き直す |
+| 「Preparing debugger support」が終わらない | Watch を充電器に載せて放置。初回は十数分かかることがある |
+| **companion app が要る旨のエラー** | `Info.plist` の `WKCompanionAppBundleIdentifier` を削除する（下記） |
+| 署名エラー | Team 未設定、または Bundle ID の衝突 |
+| 7 日後に起動しなくなった | 無料アカウントの失効。Xcode から入れ直す |
+
+> **`WKCompanionAppBundleIdentifier` について**
+>
+> 現在この値は `com.turetette` を指していますが、**その iOS アプリはまだ存在しません**。
+> Info.plist のコメントにもあるとおり、シミュレータの検証を通すためだけに置かれた値です。
+>
+> watch 単独アプリではこのキーは**付けないのが正しい形**です。実機インストールが
+> companion app 関連のエラーで失敗する場合は、このキーを削除してください。
+>
+> **P4（iPhone コンパニオン）で実際の Bundle ID を入れて復活させます。** 消したままにしないこと。
 
 ---
 
@@ -182,6 +285,7 @@ Xcode プロジェクトからも `Spike` グループを削除してくださ�
 
 ## 6. 計測時の注意
 
+- **Xcode のデバッガを繋いだままでは計測になりません**（§2.5-a）。Run したら必ず Stop で切り離すこと
 - **アプリを開くと予算がリセットされます**（WWDC22）。計測中は開かないこと
 - 24 時間のローリングウィンドウなので、フェーズ A と B は日をまたいで分けるのが確実
 - Watch の「アプリのバックグラウンド更新」がオンになっていることを確認する
