@@ -49,6 +49,11 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
     ///   完了させないと以降のバックグラウンド起動が制限される。
     func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
         for task in backgroundTasks {
+
+            // G0 スパイク中は計測側がタスクの完了まで握る（実行枠の長さを測るため）。
+            // 計測が終わったらこの 1 ブロックを削除する。
+            if SpikeRunner.shared.handle(task) { continue }
+
             switch task {
 
             case let appRefreshTask as WKApplicationRefreshBackgroundTask:

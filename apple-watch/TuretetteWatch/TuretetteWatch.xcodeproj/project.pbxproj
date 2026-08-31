@@ -17,6 +17,11 @@
 		AA000008000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000008000000000000000 /* Assets.xcassets */; };
 		AA00000A000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000A000000000000000 /* AppDelegate.swift */; };
 		AA00000B000000000000001 /* AppNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000B000000000000000 /* AppNotifications.swift */; };
+		AA00000C000000000000001 /* SpikeLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000C000000000000000 /* SpikeLog.swift */; };
+		AA00000D000000000000001 /* SpikeCentral.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000D000000000000000 /* SpikeCentral.swift */; };
+		AA00000E000000000000001 /* SpikeMotionProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000E000000000000000 /* SpikeMotionProbe.swift */; };
+		AA00000F000000000000001 /* SpikeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000F000000000000000 /* SpikeRunner.swift */; };
+		AA000010000000000000001 /* SpikeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000010000000000000000 /* SpikeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +37,11 @@
 		AA000009000000000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA00000A000000000000000 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AA00000B000000000000000 /* AppNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotifications.swift; sourceTree = "<group>"; };
+		AA00000C000000000000000 /* SpikeLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeLog.swift; sourceTree = "<group>"; };
+		AA00000D000000000000000 /* SpikeCentral.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeCentral.swift; sourceTree = "<group>"; };
+		AA00000E000000000000000 /* SpikeMotionProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeMotionProbe.swift; sourceTree = "<group>"; };
+		AA00000F000000000000000 /* SpikeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeRunner.swift; sourceTree = "<group>"; };
+		AA000010000000000000000 /* SpikeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +72,7 @@
 				AA000002000000000000000 /* ContentView.swift */,
 				CC000002000000000000000 /* Managers */,
 				CC000003000000000000000 /* Views */,
+				CC000004000000000000000 /* Spike */,
 				AA000008000000000000000 /* Assets.xcassets */,
 				AA000009000000000000000 /* Info.plist */,
 			);
@@ -93,6 +104,18 @@
 				AA000000000000000000000 /* TuretetteWatch.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		CC000004000000000000000 /* Spike */ = {
+			isa = PBXGroup;
+			children = (
+				AA00000C000000000000000 /* SpikeLog.swift */,
+				AA00000D000000000000000 /* SpikeCentral.swift */,
+				AA00000E000000000000000 /* SpikeMotionProbe.swift */,
+				AA00000F000000000000000 /* SpikeRunner.swift */,
+				AA000010000000000000000 /* SpikeView.swift */,
+			);
+			path = Spike;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -173,6 +196,11 @@
 				AA000005000000000000001 /* AlarmManager.swift in Sources */,
 				AA000006000000000000001 /* DeviceScanView.swift in Sources */,
 				AA000007000000000000001 /* AlarmView.swift in Sources */,
+				AA00000C000000000000001 /* SpikeLog.swift in Sources */,
+				AA00000D000000000000001 /* SpikeCentral.swift in Sources */,
+				AA00000E000000000000001 /* SpikeMotionProbe.swift in Sources */,
+				AA00000F000000000000001 /* SpikeRunner.swift in Sources */,
+				AA000010000000000000001 /* SpikeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
