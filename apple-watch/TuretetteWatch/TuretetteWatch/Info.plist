@@ -38,10 +38,19 @@
 	<!-- Background Modes                                          -->
 	<!-- ======================================================== -->
 
-	<!-- watchOS: Background App Refresh (WKApplicationRefreshBackgroundTask) を有効化 -->
+	<!-- 拡張ランタイムセッション（§7 段階3）の種別。                                -->
+	<!-- 画面消灯中もハプティクスを継続させるにはバックグラウンド型が必要で、        -->
+	<!-- 正当な値のうち該当するのは physical-therapy（最大 1 時間）のみ。            -->
+	<!--                                                                            -->
+	<!-- 旧値 self-contained は WKBackgroundModes の正当な値ではなく無効だった（§9-1）。 -->
+	<!-- Background App Refresh 自体はこのキー無しでも動く。                          -->
+	<!--                                                                            -->
+	<!-- 注意: 置き忘れ防止アプリで physical-therapy を宣言するのは用途との整合に    -->
+	<!-- 難があり、App Review で指摘される可能性がある（§10-3）。指摘された場合は     -->
+	<!-- 用途説明での対応か、種別の再検討が必要。                                    -->
 	<key>WKBackgroundModes</key>
 	<array>
-		<string>self-contained</string>
+		<string>physical-therapy</string>
 	</array>
 
 	<!-- BLE Central として バックグラウンド動作を許可                              -->

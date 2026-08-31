@@ -678,7 +678,7 @@ const PLAN = [
     id: "P0", kind: "main", title: "地固め — 既存コードの修正",
     goal: "いま動いているものを正しい土台にする。<b>新機能は足さない。</b>",
     tasks: [
-      { id: "P0-1", s: "todo", t: "<code>WKBackgroundModes</code> の無効値 <code>self-contained</code> を除去", tgt: "Info.plist", ref: "§9-1" },
+      { id: "P0-1", s: "done", t: "<code>WKBackgroundModes</code> の無効値 <code>self-contained</code> を除去", tgt: "Info.plist", ref: "§9-1" },
       { id: "P0-2", s: "todo", t: "<b>「切断している」と「離れている」をフラグとして分離</b>（現状は後者が常に false）", tgt: "BLEManager", ref: "§9-2" },
       { id: "P0-3", s: "todo", t: "サービス UUID を定義し <code>scanForPeripherals(withServices:)</code> へ", tgt: "BLEManager", ref: "§9-3" },
       { id: "P0-4", s: "todo", t: "復帰時の再接続を <code>retrievePeripherals(withIdentifiers:)</code> ベースに", tgt: "BLEManager", ref: "§9-3" },
@@ -697,13 +697,13 @@ const PLAN = [
     id: "P1", kind: "main", title: "止めるまで鳴るアラーム",
     goal: "README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。<b>現行実装は画面が消えた瞬間に鳴り止む。ここが製品の核。</b><br>背景 BLE 起床を使わないため<b>手元の SE(第1世代)でも実機検証でき、G0 の完了を待たずに進められる</b>ので前倒しした。",
     tasks: [
-      { id: "P1-1", s: "todo", t: "<code>UNNotificationCategory</code> と「停止」アクションの登録", tgt: "AlarmManager", ref: "§2.4" },
-      { id: "P1-2", s: "todo", t: "<b>通知の連投</b>（5 秒間隔 × 48 発、<code>threadIdentifier</code> で束ねる）", tgt: "AlarmManager", ref: "§7 段階2" },
-      { id: "P1-3", s: "todo", t: "<b>全 ID の一括キャンセル</b>（pending と delivered の両方）", tgt: "AlarmManager", ref: "§7" },
-      { id: "P1-4", s: "todo", t: "<code>interruptionLevel = .timeSensitive</code> と capability の付与", tgt: "entitlements", ref: "§2.4" },
-      { id: "P1-5", s: "todo", t: "<code>WKExtendedRuntimeSession</code> でハプティクス継続（前面で開始）", tgt: "AlarmManager", ref: "§7 段階3" },
-      { id: "P1-6", s: "todo", t: "背景終了 → 前面化でのアラーム継続", tgt: "AlarmManager", ref: "§9-7" },
-      { id: "P1-7", s: "todo", t: "停止導線と状態表示の整理", tgt: "AlarmView", ref: "—" },
+      { id: "P1-1", s: "done", t: "<code>UNNotificationCategory</code> と「停止」アクションの登録", tgt: "AlarmManager", ref: "§2.4" },
+      { id: "P1-2", s: "done", t: "<b>通知の連投</b>（5 秒間隔 × 48 発、<code>threadIdentifier</code> で束ねる）", tgt: "AlarmManager", ref: "§7 段階2" },
+      { id: "P1-3", s: "done", t: "<b>全 ID の一括キャンセル</b>（pending と delivered の両方）", tgt: "AlarmManager", ref: "§7" },
+      { id: "P1-4", s: "done", t: "<code>interruptionLevel = .timeSensitive</code> と capability の付与", tgt: "entitlements", ref: "§2.4" },
+      { id: "P1-5", s: "done", t: "<code>WKExtendedRuntimeSession</code> でハプティクス継続（前面で開始）", tgt: "AlarmManager", ref: "§7 段階3" },
+      { id: "P1-6", s: "done", t: "背景終了 → 前面化でのアラーム継続", tgt: "AlarmManager", ref: "§9-7" },
+      { id: "P1-7", s: "done", t: "停止導線と状態表示の整理", tgt: "AlarmView", ref: "—" },
       { id: "P1-8", s: "skip", t: "Critical Alerts entitlement の申請（承認前提にしない）", ref: "§7 段階0" }
     ],
     dod: [
