@@ -55,7 +55,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		CC000000000000000000000 /* = */ = {
+		CC000000000000000000000 = {
 			isa = PBXGroup;
 			children = (
 				CC000001000000000000000 /* TuretetteWatch */,
@@ -98,14 +98,6 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		CC000009000000000000000 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				AA000000000000000000000 /* TuretetteWatch.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		CC000004000000000000000 /* Spike */ = {
 			isa = PBXGroup;
 			children = (
@@ -116,6 +108,14 @@
 				AA000010000000000000000 /* SpikeView.swift */,
 			);
 			path = Spike;
+			sourceTree = "<group>";
+		};
+		CC000009000000000000000 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA000000000000000000000 /* TuretetteWatch.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -329,6 +329,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 8Z4J7V9EX9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TuretetteWatch/Info.plist;
@@ -356,6 +357,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 8Z4J7V9EX9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TuretetteWatch/Info.plist;
