@@ -615,7 +615,7 @@ body {
   <section class="prereq">
     <h2>前提条件 — 満たせないと成立しない</h2>
     <ul>
-      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）</li>
+      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）。<b>手元の SE(第1世代)は要件を満たさず、G0-1 / G0-2 は測定できない</b></li>
       <li><b>実機での検証</b> — 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない（§10-1）</li>
       <li><b>文字盤にコンプリケーションを置いてもらう</b> — 無いと背景更新が 1 時間に 1 回まで落ちる（§14.10）</li>
       <li>iPhone 側は位置情報「常に許可」 — ジオフェンス盗難検知の前提（§15.3）</li>
@@ -646,7 +646,7 @@ body {
    s: "todo" 未着手 / "wip" 着手中 / "done" 完了 / "skip" 見送り
    ══════════════════════════════════════════════════════════════ */
 
-const UPDATED = "2026-08-27";
+const UPDATED = "2026-08-31";
 const CURRENT = "G0";              // 現在着手中（またはこれから着手する）フェーズ ID
 
 const PLAN = [
