@@ -646,8 +646,8 @@ body {
    s: "todo" 未着手 / "wip" 着手中 / "done" 完了 / "skip" 見送り
    ══════════════════════════════════════════════════════════════ */
 
-const UPDATED = "2026-08-31";
-const CURRENT = "G0";              // 現在着手中（またはこれから着手する）フェーズ ID
+const UPDATED = "2026-09-01";
+const CURRENT = "P1";              // 現在着手中（またはこれから着手する）フェーズ ID
 
 const PLAN = [
   {
@@ -662,11 +662,11 @@ const PLAN = [
   },
   {
     id: "G0", kind: "gate", title: "実機スパイク — 使い捨て",
-    goal: "後続の設計を左右する 3 つの未知を、実装前に潰す。<b>ここが外れると P2 / P3 を作り直すことになる。</b>",
+    goal: "後続の設計を左右する 3 つの未知を、実装前に潰す。<b>G0-1 / G0-2 は手元の SE(第1世代)では測定できず、Series 6 以降の実機待ち。</b>G0-3 と P1 の実機検証は現在の機体で可能。",
     tasks: [
       { id: "G0-0", s: "done", t: "<b>計測ハーネスの作成</b> — Watch 側のログ・BLE・遡り問い合わせ、Mac 側のペリフェラル役、手順書", tgt: "Spike / peripheral-sim", ref: "—" },
-      { id: "G0-1", s: "todo", t: "背景 BLE 起床（<code>bluetooth-central</code> + notify）が実際に来るか", tgt: "実機", ref: "§2.1" },
-      { id: "G0-2", s: "todo", t: "<b>5 回/24h の予算が <code>didDisconnect</code> 起床も数えるか</b>", tgt: "実機", ref: "§10-2" },
+      { id: "G0-1", s: "todo", t: "背景 BLE 起床（<code>bluetooth-central</code> + notify）が実際に来るか — <b>Series 6 以降の実機待ち</b>", tgt: "要ハード", ref: "§2.1" },
+      { id: "G0-2", s: "todo", t: "<b>5 回/24h の予算が <code>didDisconnect</code> 起床も数えるか</b> — <b>Series 6 以降の実機待ち</b>", tgt: "要ハード", ref: "§10-2" },
       { id: "G0-3", s: "todo", t: "背景起床 1 回の実行枠で歩数・活動の遡り問い合わせが返るか", tgt: "実機", ref: "§14.4" }
     ],
     dod: [
@@ -695,7 +695,7 @@ const PLAN = [
   },
   {
     id: "P1", kind: "main", title: "止めるまで鳴るアラーム",
-    goal: "README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。<b>現行実装は画面が消えた瞬間に鳴り止む。ここが製品の核。</b>",
+    goal: "README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。<b>現行実装は画面が消えた瞬間に鳴り止む。ここが製品の核。</b><br>背景 BLE 起床を使わないため<b>手元の SE(第1世代)でも実機検証でき、G0 の完了を待たずに進められる</b>ので前倒しした。",
     tasks: [
       { id: "P1-1", s: "todo", t: "<code>UNNotificationCategory</code> と「停止」アクションの登録", tgt: "AlarmManager", ref: "§2.4" },
       { id: "P1-2", s: "todo", t: "<b>通知の連投</b>（5 秒間隔 × 48 発、<code>threadIdentifier</code> で束ねる）", tgt: "AlarmManager", ref: "§7 段階2" },
