@@ -28,6 +28,11 @@ final class SpikeRunner {
         // 前回の起床で返らなかった probe を回収する（G0-3）
         SpikeMotionProbe.shared.reapLostProbes()
 
+        // G0-4 は背景からローカル通知を出す計測なので、スパイク自身で許可を取る。
+        // 本体の AppDelegate は SpikeConfig.enabled のとき通らない経路があるため頼らない。
+        SpikeAlertProbe.shared.requestAuthorization()
+        SpikeAlertProbe.shared.reapDelivered()
+
         SpikeCentral.shared.start()
         scheduleRefresh()
     }
@@ -58,6 +63,9 @@ final class SpikeRunner {
 
         SpikeLog.shared.add(.wake, "種別=\(label)")
         SpikeMotionProbe.shared.reapLostProbes()
+
+        // 前回の起床で積んだ通知が実際に配信されたかを突き合わせる（G0-4 の後半）
+        SpikeAlertProbe.shared.reapDelivered()
 
         // 次回を先に予約しておく（予約し忘れると二度と起きない）
         if task is WKApplicationRefreshBackgroundTask { scheduleRefresh() }

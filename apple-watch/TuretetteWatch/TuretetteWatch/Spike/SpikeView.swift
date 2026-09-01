@@ -42,6 +42,12 @@ struct SpikeView: View {
                 HStack {
                     phaseButton("A", help: "notify のみ")
                     phaseButton("B", help: "切断のみ")
+                    phaseButton("C", help: "接続イベント")
+                }
+                if SpikeLog.shared.phase == "C" {
+                    Text("notify を購読せず registerForConnectionEvents だけで切断を拾う。Series 6 未満でも発火するかを見る（G0-5）")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                 }
 
                 Divider()
@@ -72,11 +78,14 @@ struct SpikeView: View {
     private func phaseButton(_ name: String, help: String) -> some View {
         Button {
             SpikeLog.shared.phase = name
+            // 購読と接続イベント登録を実際の状態に合わせる。
+            // ここを忘れるとフェーズ C で notify が残り、経路が特定できなくなる。
+            SpikeCentral.shared.applyPhase()
             refresh()
         } label: {
             VStack(spacing: 1) {
                 Text(name).font(.headline)
-                Text(help).font(.system(size: 9))
+                Text(help).font(.system(size: 8))
             }
             .frame(maxWidth: .infinity)
         }
@@ -134,6 +143,8 @@ struct SpikeView: View {
     }
 
     private func refresh() {
+        // 前面化のたびに、背景で積んだ通知の配信を確認する（G0-4 の後半）
+        SpikeAlertProbe.shared.reapDelivered()
         summary = SpikeLog.shared.summaryText()
         events = SpikeLog.shared.events()
     }
@@ -180,6 +191,10 @@ private struct SpikeEventRow: View {
         case .budgetExceeded, .probeLost:   return .red
         case .disconnect:                   return .orange
         case .probeStart, .probeEnd:        return .cyan
+        case .connEvent:                    return .mint
+        case .alertOK, .alertDelivered:     return .green
+        case .alertFail:                    return .red
+        case .alertTry:                     return .cyan
         default:                            return .secondary
         }
     }

@@ -13,8 +13,11 @@ enum SpikeConfig {
     /// true にすると、アプリ起動時に本体ではなく計測画面が出る。
     ///
     /// **P1 の開発中は false**（本体アプリを動かすため）。
-    /// G0-3 を計測するときだけ true に戻してビルドし直す。
+    /// 計測するときだけ true に戻してビルドし直す。
     /// G0 が終わったら `Spike/` ごと削除する。
+    ///
+    /// 現在の機体（Apple Watch SE 第1世代）で測れるのは **G0-3 と G0-5（フェーズ C）**。
+    /// G0-1 / G0-2 / G0-4 は背景 BLE 起床が要るので Series 6 以降が必要（設計 §19）。
     static let enabled = false
 
     /// ペリフェラル役（`spike/peripheral-sim`）が公開するサービス。
@@ -60,6 +63,11 @@ struct SpikeEvent: Codable, Identifiable {
         case probeStart      // 遡り問い合わせ開始（G0-3）
         case probeEnd        // 同 完了
         case probeLost       // 同 実行枠内に返らなかった
+        case connEvent       // registerForConnectionEvents の接続/切断（G0-5）
+        case alertTry        // 切断起床の枠でローカル通知の登録を試みた（G0-4）
+        case alertOK         // 同 登録に成功
+        case alertFail       // 同 登録に失敗
+        case alertDelivered  // 同 実際に配信されていたことを確認
         case note
     }
 }
@@ -94,7 +102,11 @@ final class SpikeLog {
         }
     }
 
-    /// 計測フェーズ（A: notify のみ / B: 切断のみ）を切り替える。
+    /// 計測フェーズを切り替える。
+    ///
+    /// - A: notify だけで予算を使い切る（G0-1 / G0-2 前半）
+    /// - B: 切断だけで予算を使い切る（G0-2 本題 / G0-4）
+    /// - C: notify を購読せず `registerForConnectionEvents` だけで切断を拾う（G0-5）
     var phase: String {
         get { UserDefaults.standard.string(forKey: phaseKey) ?? "A" }
         set {
@@ -149,6 +161,15 @@ final class SpikeLog {
         let probeEnds = recent.filter { $0.kind == .probeEnd }
         let probeLost = recent.filter { $0.kind == .probeLost }
 
+        // G0-4: 切断起床の枠でローカル通知を積めたか
+        let alertTry = recent.filter { $0.kind == .alertTry }
+        let alertOK = recent.filter { $0.kind == .alertOK }
+        let alertFail = recent.filter { $0.kind == .alertFail }
+        let alertDelivered = recent.filter { $0.kind == .alertDelivered }
+
+        // G0-5: registerForConnectionEvents は背景で発火するか
+        let connEvents = recent.filter { $0.kind == .connEvent }
+
         return SpikeSummary(
             phase: phase,
             backgroundNotifyCount: bgNotify.count,
@@ -161,7 +182,16 @@ final class SpikeLog {
             probeStarted: probeStarts.count,
             probeReturned: probeEnds.count,
             probeLost: probeLost.count,
-            probeDurationsMs: probeEnds.compactMap { Self.parseMs($0.detail) }
+            probeDurationsMs: probeEnds.compactMap { Self.parseMs($0.detail) },
+            alertTried: alertTry.count,
+            alertOK: alertOK.count,
+            alertFailed: alertFail.count,
+            alertDelivered: alertDelivered.count,
+            connEventBackgroundCount: connEvents.filter { $0.appState != "active" }.count,
+            connEventForegroundCount: connEvents.filter { $0.appState == "active" }.count,
+            connEventDisconnectedCount: connEvents.filter { $0.detail.contains("切断") }.count,
+            // 「切断が起きた時刻」と「アプリが起きた時刻」の差（§19.5-2 の timestamp から算出）
+            disconnectWakeDelaysMs: bgDisconnects.compactMap { Self.parseMs($0.detail) }
         )
     }
 
@@ -187,6 +217,21 @@ final class SpikeLog {
             let max = sorted.last ?? 0
             let med = sorted[sorted.count / 2]
             out.append("  所要 中央値: \(med) ms / 最大: \(max) ms")
+        }
+        out.append("")
+        out.append("[G0-4] 切断起床の枠でローカル通知を積めるか")
+        out.append("  試行: \(s.alertTried) / 登録成功: \(s.alertOK) / 失敗: \(s.alertFailed)")
+        out.append("  実際に配信されていた: \(s.alertDelivered) 件")
+        if !s.disconnectWakeDelaysMs.isEmpty {
+            let sorted = s.disconnectWakeDelaysMs.sorted()
+            out.append("  切断→起床の遅延 中央値: \(sorted[sorted.count / 2]) ms / 最大: \(sorted.last ?? 0) ms")
+        }
+        out.append("")
+        out.append("[G0-5] registerForConnectionEvents は背景で発火するか")
+        out.append("  背景: \(s.connEventBackgroundCount) 件 / 前面: \(s.connEventForegroundCount) 件")
+        out.append("  うち切断: \(s.connEventDisconnectedCount) 件")
+        if s.connEventBackgroundCount > 0 {
+            out.append("  → 背景で発火する。Series 6 未満でも切断検知の道がある")
         }
         return out.joined(separator: "\n")
     }
@@ -242,4 +287,12 @@ struct SpikeSummary {
     let probeReturned: Int
     let probeLost: Int
     let probeDurationsMs: [Int]
+    let alertTried: Int
+    let alertOK: Int
+    let alertFailed: Int
+    let alertDelivered: Int
+    let connEventBackgroundCount: Int
+    let connEventForegroundCount: Int
+    let connEventDisconnectedCount: Int
+    let disconnectWakeDelaysMs: [Int]
 }

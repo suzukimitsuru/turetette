@@ -70,8 +70,8 @@
     背景起床も read / write / subscribe のみ。→ **案 A では検知責任は 100% Watch 側にある。**
   - Watch は切断で起きるが、それは**「再接続を試みるための短い枠」**であって
     通知を出すための枠とは限らない。ここが方式1 最大の未検証点(§19.7-1)。
-  - SDK 確認により、**切断時刻が取れる `didDisconnectPeripheral:timestamp:` (watchOS 10+)** の
-    存在が判明。遡及判定(§13.8 / §14.4)の基準時刻にはこれを使うこと。
+  - SDK 確認により、**切断時刻が取れる `didDisconnectPeripheral:timestamp:`** の存在が判明。
+    遡及判定(§13.8 / §14.4)の基準時刻にはこれを使うこと。
   - **`registerForConnectionEvents` は watchOS 6.0+ で使える**(§19.5-4)。
     背景 BLE 起床とは別系統なので、**Series 6 未満の現在の機体でも試せる可能性がある。**
 
@@ -280,7 +280,8 @@ BLE の切断検知そのものは、Link Layer の **supervision timeout(実測
 
 > **★ 実装上の必須事項(§19.5)**
 > - 旧来の `didDisconnectPeripheral:error:` ではなく、
->   **`centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:`(watchOS 10+)** を使う。
+>   **`centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:`** を使う
+>   (可用性注釈が無く watchOS 9.0 ターゲットのままビルドできる。§19.5-2 の訂正を参照)。
 >   背景起床は切断から数秒遅れるため、**切断時刻が取れないと §13.8 / §14.4 の遡及判定の基準時刻がずれる。**
 > - 上図の「自前で `connect` を張り直す」猶予処理は、
 >   **`CBConnectPeripheralOptionEnableAutoReconnect`(watchOS 10+)** で OS 側に寄せられる可能性がある。
@@ -2173,7 +2174,7 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 `CBPeripheralManager` は**イニシャライザ自体が watchOS で使用不可**であり、
 アドバタイズ以前にインスタンス化できない。§15.2 の注記と §3.1 の判断は正しい。
 
-**(2) ★ 切断時刻が取れる API がある(watchOS 10+)**
+**(2) ★ 切断時刻が取れる API がある**
 
 ```objc
 - (void)centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:
@@ -2185,6 +2186,15 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 「**切断時刻の前後 60 秒に歩数が増えているか**」を核にしているので、
 **この timestamp 版を使わないと判定の基準時刻がずれる。**
 → P0 / P2 の実装では必ずこちらを採用する。
+
+> **★ 実装時の訂正(2026-09-02、スパイク実装で判明)**: 当初「watchOS 10+」と書いたが、
+> **このデリゲートメソッドには SDK ヘッダに可用性注釈が無い。**
+> `@available(watchOS 10.0, *)` を付けると
+> 「プロトコルが watchOS 9.0 での可用性を要求する」とコンパイルエラーになり、
+> **注釈なしで watchOS 9.0 のデプロイメントターゲットのままビルドできる。**
+> ただし OS が実際にどちらを呼ぶかは別問題なので、
+> スパイクでは**旧版も残して「どちらが呼ばれたか」を記録する**ようにした。
+> watchOS 10+ が確実に要るのは、次の `EnableAutoReconnect`（`NS_AVAILABLE(14_0, 17_0)`）のほう。
 
 **(3) システムによる自動再接続(watchOS 10+)**
 

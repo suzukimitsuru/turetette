@@ -690,7 +690,7 @@ const PLAN = [
       { id: "P0-6", s: "todo", t: "1 秒 <code>Timer</code> ポーリングを廃し、イベント駆動 + 適応間隔へ", tgt: "BLEManager", ref: "§9-4" },
       { id: "P0-7", s: "todo", t: "アラーム状態の永続化（背景終了に耐える）", tgt: "AlarmManager", ref: "§9-7" },
       { id: "P0-8", s: "todo", t: "発火ロジックを View から剥がす下準備（通知経路の整理）", tgt: "ContentView", ref: "§9-8" },
-      { id: "P0-9", s: "todo", t: "<b>切断デリゲートを <code>didDisconnectPeripheral:timestamp:</code> に切り替える</b>（watchOS 10+）。切断時刻が無いと遡及判定の基準がずれる", tgt: "BLEManager", ref: "§19.5-2" },
+      { id: "P0-9", s: "todo", t: "<b>切断デリゲートを <code>didDisconnectPeripheral:timestamp:</code> に切り替える</b>。切断時刻が無いと遡及判定の基準がずれる", tgt: "BLEManager", ref: "§19.5-2" },
       { id: "P0-10", s: "todo", t: "<b><code>txPower</code> / <code>n</code> の実機較正</b> — 現在の <code>-59</code> / <code>2.0</code> は自由空間の値。較正前の 2m しきい値は根拠を持たない", tgt: "BLEManager", ref: "§17.3" }
     ],
     dod: [

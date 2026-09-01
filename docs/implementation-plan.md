@@ -99,7 +99,7 @@ G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留。
 | P0-6 | 1 秒 `Timer` ポーリングを廃し、イベント駆動 + 適応間隔へ | `BLEManager` | §9-4 |
 | P0-7 | アラーム状態の永続化(背景終了に耐える) | `AlarmManager` | §9-7 |
 | P0-8 | 発火ロジックを View から剥がす下準備(通知経路の整理) | `ContentView` / `AppNotifications` | §9-8 |
-| **P0-9** | **切断デリゲートを `didDisconnectPeripheral:timestamp:isReconnecting:error:` に切り替える**(watchOS 10+)。切断時刻を永続化する | `BLEManager` | §19.5-2 ★ |
+| **P0-9** | **切断デリゲートを `didDisconnectPeripheral:timestamp:isReconnecting:error:` に切り替える**。切断時刻を永続化する。旧版も残し、どちらが呼ばれたかを記録する | `BLEManager` | §19.5-2 ★ |
 | **P0-10** | **`txPower` / `n` の実機較正。** 1m 刻みの RSSI を屋内・屋外で記録し、現在の `-59` / `2.0` を置き換える | `BLEManager` | §17.3 / §17.6 |
 
 **完了条件**
