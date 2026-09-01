@@ -43,6 +43,18 @@ struct AlarmView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 8)
 
+                // 鳴動経路の表示。段階 3 が張れていれば画面消灯中も鳴り続ける
+                HStack(spacing: 4) {
+                    Image(systemName: alarmManager.isContinuousHapticActive
+                          ? "waveform.circle.fill" : "bell.badge.fill")
+                        .font(.system(size: 10))
+                    Text(alarmManager.isContinuousHapticActive
+                         ? "停止するまで鳴り続けます"
+                         : "通知で通知中")
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(.white.opacity(0.85))
+
                 // RSSI / distance info
                 if bleManager.isConnected {
                     VStack(spacing: 2) {

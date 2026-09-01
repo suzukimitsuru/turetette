@@ -11,8 +11,11 @@ import WatchKit
 enum SpikeConfig {
 
     /// true にすると、アプリ起動時に本体ではなく計測画面が出る。
-    /// G0 の計測が終わったら false に戻す（あるいは `Spike/` ごと削除する）。
-    static let enabled = true
+    ///
+    /// **P1 の開発中は false**（本体アプリを動かすため）。
+    /// G0-3 を計測するときだけ true に戻してビルドし直す。
+    /// G0 が終わったら `Spike/` ごと削除する。
+    static let enabled = false
 
     /// ペリフェラル役（`spike/peripheral-sim`）が公開するサービス。
     static let serviceUUIDString = "E7A1B2C0-1D3E-4F5A-8B6C-9D0E1F2A3B4C"

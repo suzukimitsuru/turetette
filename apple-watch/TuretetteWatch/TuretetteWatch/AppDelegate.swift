@@ -28,6 +28,8 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
     // MARK: - App Lifecycle
 
     func applicationDidFinishLaunching() {
+        UNUserNotificationCenter.current().delegate = self
+        registerAlarmCategory()
         requestNotificationPermission()
         scheduleBackgroundRefresh()
     }
@@ -100,6 +102,9 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
         // BLEManager に RSSI の単発チェックを依頼
         NotificationCenter.default.post(name: .backgroundBLECheckRequested, object: nil)
 
+        // アラーム中なら通知の連投を補充する（1 バッチは約 4 分で尽きる、§7 段階2）
+        NotificationCenter.default.post(name: .alarmRefillRequested, object: nil)
+
         // 次回リフレッシュをスケジュールしてからタスクを完了
         scheduleBackgroundRefresh()
         task.setTaskCompletedWithSnapshot(false)
@@ -123,5 +128,55 @@ final class AppDelegate: NSObject, WKApplicationDelegate {
             }
             print("[AppDelegate] Notification permission granted: \(granted)")
         }
+    }
+
+    // MARK: - Alarm Notification Category
+
+    /// 通知から直接「停止」を押せるようにする（§2.4）。
+    /// アプリを開かなくても止められるので、鳴りっぱなしを確実に終わらせられる。
+    private func registerAlarmCategory() {
+        let stop = UNNotificationAction(
+            identifier: AlarmManager.stopActionIdentifier,
+            title: "停止",
+            options: [.destructive, .authenticationRequired]
+        )
+        let category = UNNotificationCategory(
+            identifier: AlarmManager.categoryIdentifier,
+            actions: [stop],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+
+    /// 前面にいる間も通知を出す。出さないと、前面でアラームが鳴っていることが分からない。
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    /// 通知への操作を受け取る。
+    /// - 「停止」アクション → アラームを止める
+    /// - 通知本体をタップ → アプリが前面化し、`appDidBecomeActive` 経由で §7 段階3 が始まる
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        switch response.actionIdentifier {
+        case AlarmManager.stopActionIdentifier, UNNotificationDismissActionIdentifier:
+            NotificationCenter.default.post(name: .alarmStopRequested, object: nil)
+        default:
+            break
+        }
+        completionHandler()
     }
 }

@@ -18,8 +18,20 @@ extension Notification.Name {
     )
 
     /// アプリがフォアグラウンドに戻った時に AppDelegate が投げる
-    /// AlarmManager が受け取り、バックグラウンド中に発火したアラームのハプティクスを再開する
+    /// AlarmManager が受け取り、拡張ランタイムセッション（§7 段階3）を張り直す
     static let appDidBecomeActive = Notification.Name(
         "com.turetette.watch.appDidBecomeActive"
+    )
+
+    /// 通知の「停止」アクションが押された時に AppDelegate が投げる
+    /// AlarmManager が受け取り、鳴っている経路をすべて止める
+    static let alarmStopRequested = Notification.Name(
+        "com.turetette.watch.alarmStopRequested"
+    )
+
+    /// 背景更新のたびに AppDelegate が投げる
+    /// AlarmManager が受け取り、尽きかけた通知の連投を積み直す
+    static let alarmRefillRequested = Notification.Name(
+        "com.turetette.watch.alarmRefillRequested"
     )
 }
