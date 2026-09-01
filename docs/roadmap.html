@@ -615,7 +615,7 @@ body {
   <section class="prereq">
     <h2>前提条件 — 満たせないと成立しない</h2>
     <ul>
-      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）。<b>手元の SE(第1世代)は要件を満たさず、G0-1 / G0-2 は測定できない</b></li>
+      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）。<b>手元の SE(第1世代)は要件を満たさず、G0-1 / G0-2 / G0-4 は測定できない</b></li>
       <li><b>実機での検証</b> — 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない（§10-1）</li>
       <li><b>文字盤にコンプリケーションを置いてもらう</b> — 無いと背景更新が 1 時間に 1 回まで落ちる（§14.10）</li>
       <li>iPhone 側は位置情報「常に許可」 — ジオフェンス盗難検知の前提（§15.3）</li>
@@ -646,7 +646,7 @@ body {
    s: "todo" 未着手 / "wip" 着手中 / "done" 完了 / "skip" 見送り
    ══════════════════════════════════════════════════════════════ */
 
-const UPDATED = "2026-09-01";
+const UPDATED = "2026-09-02";
 const CURRENT = "P1";              // 現在着手中（またはこれから着手する）フェーズ ID
 
 const PLAN = [
@@ -657,21 +657,25 @@ const PLAN = [
       { id: "D1", s: "done", t: "BLE 切断 / GPS 距離の 2 方式と多段アラームの検討", ref: "§1–§11" },
       { id: "D2", s: "done", t: "GPS 距離方式の欠点と検討事項（suppress-only 方針の確立）", ref: "§12" },
       { id: "D3", s: "done", t: "移動開始で検出モードへ移る仕様（L0/L1/L2 と遅延発報）", ref: "§13" },
-      { id: "D4", s: "done", t: "歩行距離による遡及検出 / iPhone 側の起床手段 / AirTag 調査", ref: "§14–§16" }
+      { id: "D4", s: "done", t: "歩行距離による遡及検出 / iPhone 側の起床手段 / AirTag 調査", ref: "§14–§16" },
+      { id: "D5", s: "done", t: "<b>BLE 実効レンジ / 背景実行能力の対比 / 切断検知の可否（SDK 実地確認）</b> — <b>ペリフェラル役の iPhone は切断を検知できない</b>、切断時刻が取れる API、<code>registerForConnectionEvents</code> は watchOS 6+、AlarmKit は iOS 専用", ref: "§17–§19" }
     ]
   },
   {
     id: "G0", kind: "gate", title: "実機スパイク — 使い捨て",
-    goal: "後続の設計を左右する 3 つの未知を、実装前に潰す。<b>G0-1 / G0-2 は手元の SE(第1世代)では測定できず、Series 6 以降の実機待ち。</b>G0-3 と P1 の実機検証は現在の機体で可能。",
+    goal: "後続の設計を左右する未知を、実装前に潰す。<b>G0-1 / G0-2 / G0-4 は手元の SE(第1世代)では測定できず、Series 6 以降の実機待ち。</b>G0-3 と <b>G0-5</b> は現在の機体で試せる。<b>G0-5 が発火すれば保留中の G0-1 / G0-2 を迂回できるため、最優先。</b>",
     tasks: [
       { id: "G0-0", s: "done", t: "<b>計測ハーネスの作成</b> — Watch 側のログ・BLE・遡り問い合わせ、Mac 側のペリフェラル役、手順書", tgt: "Spike / peripheral-sim", ref: "—" },
       { id: "G0-1", s: "todo", t: "背景 BLE 起床（<code>bluetooth-central</code> + notify）が実際に来るか — <b>Series 6 以降の実機待ち</b>", tgt: "要ハード", ref: "§2.1" },
       { id: "G0-2", s: "todo", t: "<b>5 回/24h の予算が <code>didDisconnect</code> 起床も数えるか</b> — <b>Series 6 以降の実機待ち</b>", tgt: "要ハード", ref: "§10-2" },
-      { id: "G0-3", s: "todo", t: "背景起床 1 回の実行枠で歩数・活動の遡り問い合わせが返るか", tgt: "実機", ref: "§14.4" }
+      { id: "G0-3", s: "todo", t: "背景起床 1 回の実行枠で歩数・活動の遡り問い合わせが返るか", tgt: "実機", ref: "§14.4" },
+      { id: "G0-4", s: "todo", t: "切断起床の「再接続用の短い枠」でローカル通知を積めるか — <b>Series 6 以降の実機待ち</b>", tgt: "要ハード", ref: "§19.4" },
+      { id: "G0-5", s: "todo", t: "<b><code>registerForConnectionEvents</code> が背景で発火するか</b> — <b>watchOS 6+ の API なので現機体で試せる可能性。最優先</b>（ハーネスにフェーズ C の追加が必要）", tgt: "Spike", ref: "§19.5-4" }
     ],
     dod: [
-      "3 項目の実測値が docs/spike-g0.md の表に記録されている",
-      "その結果が P2 / P3 の設計に反映されている"
+      "現機体で測れる項目（G0-3 / G0-5）の実測値が docs/spike-g0.md の表に記録されている",
+      "その結果が P2 / P3 の設計に反映されている",
+      "G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留のまま残す"
     ]
   },
   {
@@ -685,12 +689,16 @@ const PLAN = [
       { id: "P0-5", s: "todo", t: "RSSI の移動中央値フィルタ + ヒステリシス（出 2.5m / 復帰 1.5m）", tgt: "BLEManager", ref: "§9-5" },
       { id: "P0-6", s: "todo", t: "1 秒 <code>Timer</code> ポーリングを廃し、イベント駆動 + 適応間隔へ", tgt: "BLEManager", ref: "§9-4" },
       { id: "P0-7", s: "todo", t: "アラーム状態の永続化（背景終了に耐える）", tgt: "AlarmManager", ref: "§9-7" },
-      { id: "P0-8", s: "todo", t: "発火ロジックを View から剥がす下準備（通知経路の整理）", tgt: "ContentView", ref: "§9-8" }
+      { id: "P0-8", s: "todo", t: "発火ロジックを View から剥がす下準備（通知経路の整理）", tgt: "ContentView", ref: "§9-8" },
+      { id: "P0-9", s: "todo", t: "<b>切断デリゲートを <code>didDisconnectPeripheral:timestamp:</code> に切り替える</b>（watchOS 10+）。切断時刻が無いと遡及判定の基準がずれる", tgt: "BLEManager", ref: "§19.5-2" },
+      { id: "P0-10", s: "todo", t: "<b><code>txPower</code> / <code>n</code> の実機較正</b> — 現在の <code>-59</code> / <code>2.0</code> は自由空間の値。較正前の 2m しきい値は根拠を持たない", tgt: "BLEManager", ref: "§17.3" }
     ],
     dod: [
       "背景 RSSI チェックの未接続分岐が実際に発火する",
       "2m 付近を往復しても圏外判定が振動しない（実機）",
-      "背景でアプリを終了させても、再起動でアラーム状態が復元される"
+      "背景でアプリを終了させても、再起動でアラーム状態が復元される",
+      "切断イベントに「いつ切れたか」が付いている",
+      "距離しきい値が実測に基づいている"
     ]
   },
   {
@@ -717,7 +725,7 @@ const PLAN = [
     goal: "判定を 1 か所に集め、誤検知の抑制と背景予算の管理を入れる。",
     tasks: [
       { id: "P2-1", s: "todo", t: "<b><code>ProximityCoordinator</code> 新規</b> — Idle / Guarding / Suspect / Confirming / Alarming", tgt: "新規", ref: "§6" },
-      { id: "P2-2", s: "todo", t: "猶予タイマーと再接続試行（遮蔽による誤検知の吸収）", tgt: "ProximityCoordinator", ref: "§3.2" },
+      { id: "P2-2", s: "todo", t: "猶予タイマーと再接続試行（遮蔽による誤検知の吸収）。<code>EnableAutoReconnect</code>（watchOS 10+）で OS 側に寄せられないか比較", tgt: "ProximityCoordinator", ref: "§3.2 / §19.5-3" },
       { id: "P2-3", s: "todo", t: "背景予算の監視（<code>LeGattNear/Exceeded…</code>）と枯渇時の縮退", tgt: "BLEManager", ref: "§6" },
       { id: "P2-4", s: "todo", t: "<code>handle(_:)</code> の分岐整理 + WatchConnectivity タスク分岐を追加", tgt: "AppDelegate", ref: "§8-10" },
       { id: "P2-5", s: "todo", t: "<code>ContentView</code> を表示専用にする", tgt: "ContentView", ref: "§9-8" },
@@ -775,7 +783,7 @@ const PLAN = [
   },
   {
     id: "P4", kind: "main", title: "iPhone コンパニオン — 盗難検知",
-    goal: "iPhone を守る対象にする。同時に、<b>Watch 側では原理的に検出できない「iPhone だけが動く」盗難</b>を拾う。",
+    goal: "iPhone を守る対象にする。同時に、<b>Watch 側では原理的に検出できない「iPhone だけが動く」盗難</b>を拾う。<br><b>注意: ペリフェラル役の iPhone は切断を検知できない（§19.3）。</b>検知責任は Watch 側にあり、iPhone 側の検知はジオフェンス（位置）に依る。",
     tasks: [
       { id: "P4-1", s: "todo", t: "iOS ターゲット新規作成。Bundle ID を <code>WKCompanionAppBundleIdentifier</code> と一致させる", ref: "§8" },
       { id: "P4-2", s: "todo", t: "<code>CBPeripheralManager</code> — サービス公開、背景アドバタイズ、状態復元", ref: "§3.1" },
@@ -787,7 +795,9 @@ const PLAN = [
       { id: "P4-8", s: "todo", t: "<b>起床後の遡及判定 — 歩数 0 + 位置変化 = 盗難</b>", ref: "§15.4" },
       { id: "P4-9", s: "todo", t: "Watch と BLE 接続中なら誤報を抑制（持ち主が一緒にいる証拠）", ref: "§15.3" },
       { id: "P4-10", s: "todo", t: "「常に許可」のオンボーディングと、拒否時の縮退 UI", ref: "§15.3" },
-      { id: "P4-11", s: "skip", t: "<code>CMSensorRecorder</code> の可用性判定と振動履歴の取得（機種依存）", ref: "§15.4" }
+      { id: "P4-11", s: "skip", t: "<code>CMSensorRecorder</code> の可用性判定と振動履歴の取得（機種依存）", ref: "§15.4" },
+      { id: "P4-12", s: "todo", t: "<b>AlarmKit（iOS 26+）で盗難アラームを発報</b> — 消音・集中モードを貫通する鳴りっぱなしアラームが、Critical Alerts の個別申請なしに成立する", ref: "§18.4" },
+      { id: "P4-13", s: "todo", t: "ジオフェンス起床の実行枠から AlarmKit のアラームを登録できるか検証（P4-12 の前提）", ref: "§18.4" }
     ]
   },
   {

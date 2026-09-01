@@ -1,7 +1,8 @@
 # iPhone スリープ中の Apple Watch アラーム — 方式検討
 
 > 対象: `apple-watch/TuretetteWatch`(watchOS アプリ)+ 未実装の `ios/`(iPhone コンパニオン)
-> 検討日: 2026-08-23 / 前提 watchOS 9.0+、iOS 16+
+> 検討日: 2026-08-23(§0〜§16) / 追加調査: 2026-09-02(§17〜§19)
+> 前提 watchOS 9.0+、iOS 16+
 
 「iPhone がスリープ状態でも Apple Watch に通知を送り、ユーザが止めるまでアラームを鳴らす」
 ための 2 方式(BLE 切断検知 / GPS 距離比較)を、watchOS の実際の制約に照らして検討する。
@@ -56,6 +57,23 @@
   - **識別子が約 15 分で回転するため、そもそも「自分の AirTag」を追跡対象にできない。**
   - 代わりに**モーション付きの汎用 BLE タグ**を使えば、タグ側 × Watch 側の動きの 2×2 で
     **置き忘れと盗難を、距離もしきい値も無しに区別できる**(§16.5)。
+- 13. **「何 m で切れるか」は決まらない。切断は距離ではなく supervision timeout で起きる**(§17)。
+  - 公称 10m、屋外で 30〜70m、屋内では 5〜15m。Apple 自身がレンジを数値で定義していない。
+  - RSSI は静止していても 5〜10dB 揺れ、距離換算では 2〜3 倍の誤差になる。
+  - **切断は「離脱の証拠」ではなく「離脱の疑いの発生」**でしかない。
+  - `txPower = -59` / `n = 2.0` は自由空間の値。**実機で較正しないと 2m しきい値は根拠を持たない**(§17.6)。
+- 14. **AlarmKit(iOS 26+)は本線には使えないが、盗難検知(§15.3)には使える**(§18.4)。
+  - 消音・集中モードを貫通する鳴りっぱなしアラームが、**Critical Alerts の個別申請なしに**作れる。
+  - ただし **iOS / iPadOS 専用で watchOS SDK が無い**ため、Watch 単独で鳴らす §7 の結論は変わらない。
+- 15. **背景での切断検知は「役割」に依存する。iPhone はペリフェラル役だと切断を検知できない**(§19)★。
+  - `CBPeripheralManagerDelegate` に切断に相当するメソッドが無く、
+    背景起床も read / write / subscribe のみ。→ **案 A では検知責任は 100% Watch 側にある。**
+  - Watch は切断で起きるが、それは**「再接続を試みるための短い枠」**であって
+    通知を出すための枠とは限らない。ここが方式1 最大の未検証点(§19.7-1)。
+  - SDK 確認により、**切断時刻が取れる `didDisconnectPeripheral:timestamp:` (watchOS 10+)** の
+    存在が判明。遡及判定(§13.8 / §14.4)の基準時刻にはこれを使うこと。
+  - **`registerForConnectionEvents` は watchOS 6.0+ で使える**(§19.5-4)。
+    背景 BLE 起床とは別系統なので、**Series 6 未満の現在の機体でも試せる可能性がある。**
 
 ---
 
@@ -124,6 +142,10 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 > 誤検知で 1 回使うたびに、本当に必要な場面の弾が減る。
 > §3.3 の誤検知抑制と、 §6 の予算管理は必須。
 > なお `didDisconnectPeripheral` による切断検知も同じ背景実行枠を消費するとみなして設計するのが安全。
+>
+> **★ 補正(§19.4 / §19.6)**: 切断で起きること自体は確認できたが、その枠は
+> 「**再接続を試みるための短い枠**」と位置づけられており、notify による「通知を出すための枠」とは
+> 別物に読める。**その枠でローカル通知を積めるかは未検証**(§19.7-1)。上の保守的な前提は維持する。
 
 ### 2.2 watchOS の位置情報 — ジオフェンスが使えない
 
@@ -158,6 +180,7 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 | Mindfulness | `mindfulness` | 前面維持 | 1 時間 | 不可 |
 | Physical therapy | `physical-therapy` | バックグラウンド | 1 時間 | 不可 |
 | Smart alarm | `alarm` | バックグラウンド | 30 分 | **可**(36 時間先まで) |
+| Underwater depth | `underwater-depth` | バックグラウンド | — | 不可 |
 | (Workout) | `workout-processing` | バックグラウンド | 実質無制限 | — |
 
 共通の制約：
@@ -231,6 +254,12 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 - Watch を起こすため、`CBMutableCharacteristic` に `.notify` を持たせ、接続中に定期的(例：数分に 1 回)または状態変化時に `updateValue` する。
   - これが §2.1 の起床トリガになる。心拍のような高頻度更新は予算を焼き切るので厳禁。
 
+> **★ 補正(§19.3)**: それだけではない。**ペリフェラル役の iPhone は、そもそも切断を検知できない。**
+> `CBPeripheralManagerDelegate` に `didDisconnect` に相当するメソッドが無く、
+> `bluetooth-peripheral` で背景起床するのは read / write / subscribe のみである。
+> → **案 A において「離れた」を検知する責任は 100% Watch 側にある。**
+> iPhone は自分が置き去りにされたことを知る手段を持たない。
+
 ### 3.2 検知の流れ
 
 ```
@@ -248,6 +277,14 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 
 BLE の切断検知そのものは、Link Layer の **supervision timeout(実測で概ね数秒)** で起きる。
 即応性は十分。問題は精度側にある。
+
+> **★ 実装上の必須事項(§19.5)**
+> - 旧来の `didDisconnectPeripheral:error:` ではなく、
+>   **`centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:`(watchOS 10+)** を使う。
+>   背景起床は切断から数秒遅れるため、**切断時刻が取れないと §13.8 / §14.4 の遡及判定の基準時刻がずれる。**
+> - 上図の「自前で `connect` を張り直す」猶予処理は、
+>   **`CBConnectPeripheralOptionEnableAutoReconnect`(watchOS 10+)** で OS 側に寄せられる可能性がある。
+>   ただし §17.5 のレンジ縮小挙動との相互作用は未確認。
 
 ### 3.3 誤検知の要因と対策
 
@@ -482,6 +519,11 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 (セッション上限まで：physical-therapy / mindfulness なら 1 時間)。
 
 ### 段階 0(理想形)：Critical Alert
+
+> **★ 補正(§18.4)**: iOS 26 で **AlarmKit** が追加され、
+> 個別申請なしに消音・集中モードを貫通するアラームが作れるようになった。
+> ただし **iOS / iPadOS 専用で watchOS SDK が無い**ため、
+> **Watch 上で鳴らす本節の結論は変わらない。** 使えるのは §15.3 の盗難検知(iPhone 側で鳴らす)のみ。
 
 `com.apple.developer.usernotifications.critical-alerts` を取得できれば、
 消音・おやすみモードを貫通し、画面を点灯させ、固定音量で鳴らせる。
@@ -1614,7 +1656,8 @@ Core Motion は駄目だが、iOS には watchOS に無いものが揃ってい�
 
 > **注意:** iBeacon は魅力的(最速)だが、**Apple Watch は iBeacon になれない。**
 > watchOS / tvOS / visionOS では `CBPeripheralManager` によるアドバタイズがサポートされておらず、
-> **Apple Watch は BLE の central にしかなれない。** §3.1 で iPhone を
+> **Apple Watch は BLE の central にしかなれない**(§19.5-1 で SDK により裏取り済み。
+> `CBPeripheralManager` はイニシャライザが `API_UNAVAILABLE(watchos, tvos)`)。§3.1 で iPhone を
 > ペリフェラル役にしたのはこの制約が理由であり、その判断は正しかった。
 > BLE タグ側がビーコンを名乗れるなら、iPhone がそれを監視する構成は成立する。
 
@@ -1723,6 +1766,8 @@ sequenceDiagram
 | 10 | Watch との BLE 接続が生きているときの誤報抑制(持ち主が一緒) |
 | 11 | 「常に許可」のオンボーディングと、拒否時の縮退 UI |
 | 12 | (任意)`CMSensorRecorder` の可用性判定と、使える機種での振動履歴の取得 |
+| 13 | **★ AlarmKit(iOS 26+)で発報する**(§18.4)。`NSAlarmKitUsageDescription` + `AlarmManager` の認可。消音・集中モードを貫通する鳴りっぱなしアラームが、Critical Alerts の個別申請なしに成立する |
+| 14 | 背景起床(ジオフェンス)の実行枠の中から AlarmKit のアラームを登録できるか検証(§19.7 の枠外だが、13 の前提条件) |
 
 ---
 
@@ -1870,7 +1915,325 @@ ANOS が非所有者デバイスに公開している opcode は次のとおり�
 
 ---
 
-## 17. 参考資料
+## 17. BLE の実効レンジと、切断が起きる条件(調査日 2026-09-02)
+
+方式1 は「切断」を一次トリガにしている。ではその切断は**何メートルで起きるのか**を調べた。
+
+### 17.1 「何 m で切れるか」は決まらない
+
+| 条件 | 目安 |
+|---|---|
+| 公称(Bluetooth Class 2 / BLE) | **約 10m** |
+| 見通しの良い屋外 | 30〜70m 持つという報告がある |
+| 屋内・壁 1 枚を挟む | 5〜15m で不安定化 |
+| 体を挟む(手首と反対側に iPhone) | それだけで 10dB 以上減衰 |
+| 水中 | 即断(2.4GHz は水に強く吸収される) |
+
+**Apple の公式サポート文書は「iPhone が Bluetooth 範囲外のとき」という表現を使うだけで、
+距離を数値で定義していない。** これは意図的で、実効レンジが完全に環境依存だからである。
+
+### 17.2 切断の実際のトリガーは距離ではない
+
+切断は Link Layer の **supervision timeout**(設定範囲 100ms〜32 秒、実測はおおむね数秒)で起きる。
+この時間内に相手のパケットを 1 つも受け取れないと切断される。したがって：
+
+- 電波が弱くても届いてさえいれば切れない(−90dBm 付近でもリンクは維持されうる)
+- 至近距離でも、電子レンジや 2.4GHz 帯の混雑で一瞬途切れれば切れる
+- 同じ場所に静止していても RSSI は **5〜10dB 揺れる**(マルチパス)。
+  距離換算では **2〜3 倍の誤差**になる
+
+> **設計上の含意**: 「切れた ≒ N メートル離れた」という対応は成立しない。
+> 切断は**離脱の証拠ではなく、離脱の疑いの発生**でしかない。
+> §3.3 の誤検知抑制と §14 の遡及判定が本質的に必要なのはこのためである。
+
+### 17.3 現行実装への含意
+
+- `BLEManager.distanceThreshold = 2.0` は、切断(10m 前後)の **5 倍手前**で発火する。
+  つまり本アプリでは**切断検知より RSSI 判定のほうが先に効く**。
+  この 2 つは別の検出器であり、別々にチューニングする必要がある。
+- 2m を素の RSSI 1 サンプルで判定すると誤検知だらけになる(§9-5 と同じ指摘)。
+  移動中央値フィルタとヒステリシス(出 2.5m / 復帰 1.5m)は必須。
+- `txPower = -59 dBm` / `n = 2.0` は**自由空間の値**である。
+  屋内では経路損失指数 `n` は 2.5〜4 になるのが普通なので、
+  **実機で 1m 刻みの RSSI を測って較正しないと、2m しきい値は意味を持たない**(§17.6)。
+
+### 17.4 システムのペアリングと、アプリの BLE 接続は別物
+
+Apple Watch は iPhone との Bluetooth が切れると、**Wi-Fi(iPhone とペアリング済みの 2.4GHz
+ネットワーク)→ セルラー**の順に自動フォールバックする。§2.5 で触れた
+「圏内は Wi-Fi 経由でも成立するため、自宅内では離れても圏内判定になりやすい」はこれである。
+
+ただし**これが効くのは `WCSession` の reachability であって、
+方式1 で使う CoreBluetooth の自前接続には Wi-Fi 代替は無い。**
+切断検知としてはむしろ都合が良い側の性質なので、混同しないこと。
+
+### 17.5 レンジ境界に居続けると、検知能力そのものが落ちる ★
+
+WWDC22 のセッションに明記がある。
+
+> 背景 BLE 接続中にデバイスが Bluetooth レンジの境界にあって**切断を繰り返すと、
+> 再接続レンジが縮められる**。Apple Watch にごく近いデバイスしか再接続しなくなる。
+
+→ 「ぎりぎりの距離でうろうろする」使い方は、**予算を焼くだけでなく、
+システムに検知能力を絞られる**。§3.3 の誤検知抑制は、§2.1 の 5 回/24h 予算だけでなく
+この理由からも必須である。
+
+### 17.6 実測タスク(P0 への追加候補)
+
+`spike/peripheral-sim` を相手役に、実機 Watch で 1m 刻みの RSSI を記録し、
+`txPower` と `n` を較正する。屋内・屋外の 2 条件で取る。
+これをやらないと §17.3 のとおり 2m しきい値は根拠を持たない。
+
+---
+
+## 18. 背景実行能力の全体像 — iOS と watchOS の対比(調査日 2026-09-02)
+
+§2 / §13.4 / §15.2 で個別に調べてきたことを、**両 OS を並べた一枚の形**に整理する。
+この非対称性が、本設計のほぼすべての判断の根拠になっている。
+
+### 18.1 最重要の非対称性
+
+| | iPhone (iOS) | Apple Watch (watchOS) |
+|---|---|---|
+| 起床のきっかけ | **8 種類以上**(位置・BLE・Health・push・BGTask…) | **4 種類だけ**(BLE / BAR / WC 受信 / HealthKit) |
+| 位置で起床 | ジオフェンス・SLC・Visit すべて可 | **全部不可**(§2.2) |
+| モーションで起床 | 不可(§15.1) | 不可(§13.4) |
+| 強制終了後の復帰 | 位置系・CoreBluetooth 状態復元なら復帰する | **どの経路も復帰しない** |
+| 起床頻度の予算 | 経路ごとに独立、比較的緩い | **全経路合計で 1 時間に約 4 回**(要コンプリケーション、§14.10) |
+
+→ **iPhone は「起きる理由」が豊富、Watch は極端に貧しい。**
+§3.1 で iPhone をペリフェラル役に、Watch を判定役に置いたのは、この非対称性の帰結である。
+
+### 18.2 何がアプリを起こせるか
+
+#### iPhone(iOS)
+
+| 経路 | きっかけ | force-quit 後 | 遅延 |
+|---|---|---|---|
+| Significant Location Change | 基地局/Wi-Fi 環境の変化 | **復帰する** | 500m / 数分 |
+| Region monitoring(ジオフェンス) | 円の出入り | **復帰する** | 半径 100m 下限、20 秒滞留、3〜5 分スロットル |
+| Visit monitoring | 滞在の開始/終了 | 復帰する | 数分〜十数分 |
+| iBeacon monitoring | ビーコン圏内の出入り | 復帰する | **数秒〜十数秒(最速)** |
+| CoreBluetooth central + 状態復元 | notify / **切断** | **復帰する** | 数秒 |
+| CoreBluetooth peripheral + 状態復元 | central からの read / write / subscribe | 復帰する | 数秒 |
+| HealthKit 背景配信 | サンプルの書き込み | する | `stepCount` は**最短 1 時間** |
+| サイレントプッシュ | サーバ | する | **配信保証なし** |
+| `BGAppRefreshTask` | システムの都合 | しない | 数時間 |
+| `BGProcessingTask` | 充電中・アイドル時 | しない | 数時間〜 |
+
+#### Apple Watch(watchOS)
+
+起床の入口は `WKRefreshBackgroundTask` のサブクラス経由で、実質これだけである。
+
+| タスク型 | きっかけ | 備考 |
+|---|---|---|
+| `WKBluetoothAlertRefreshBackgroundTask` | 接続済みペリフェラルの Bluetooth 更新 | **watchOS 9+ / Series 6 以降**、24h で 5 回(§2.1) |
+| `WKApplicationRefreshBackgroundTask` | 自分で予約した BAR | 1h に約 4 回(要コンプリケーション)、無ければ 1h に 1 回 |
+| `WKWatchConnectivityRefreshBackgroundTask` | iPhone からの `transferUserInfo` 等 | iPhone スリープ中でもキュー配信される(§2.5) |
+| `WKURLSessionRefreshBackgroundTask` | 背景 URLSession の完了 | BAR と並んで**やや長めの実行時間**が貰える |
+| HealthKit `HKObserverQuery` | 歩数などの書き込み | BAR と**予算共有**(§14.9) |
+| `WKSnapshotRefreshBackgroundTask` | Dock 表示用スナップショット要求 | 描画目的。ロジック用ではない |
+
+**位置情報とモーションは、どちらの OS でも「起きる理由」にならない。**
+どちらも「起きている間の情報源」でしかない。
+
+### 18.3 起きたあと、どれだけ動けるか
+
+| 手段 | プラットフォーム | 時間 |
+|---|---|---|
+| `beginBackgroundTask` | iOS | **約 30 秒**(iOS 13 で 180 秒から短縮。5 秒前に expiration handler。ハードコード禁止) |
+| `BGAppRefreshTask` | iOS | 約 30 秒 |
+| `BGProcessingTask` | iOS | 数分(充電中前提) |
+| `WKRefreshBackgroundTask` | watchOS | 数秒〜十数秒(**非公式**。速やかに `setTaskCompleted` を呼ぶ前提) |
+| `WKExtendedRuntimeSession` | watchOS | 種別により 10 分〜1 時間(§2.3) |
+| Workout session | watchOS | 実質無制限(常時ワークアウト扱いになる副作用あり) |
+
+### 18.4 ★ AlarmKit(iOS 26+)── Critical Alert 申請の代替になりうる
+
+WWDC25 で追加された新フレームワークで、**サードパーティアプリに純正時計アプリと同等の
+アラーム権限**を与える。§2.4 / §7 の「段階 0(理想形)」の前提が変わる。
+
+| 項目 | 内容 |
+|---|---|
+| できること | **消音スイッチ・集中モードを貫通**、フルスクリーンの停止/スヌーズ UI、ロック画面・Dynamic Island 対応 |
+| 必要なもの | `NSAlarmKitUsageDescription` と `AlarmManager` による認可のみ。**Apple への個別申請は不要** |
+| プラットフォーム | **iOS / iPadOS / Mac Catalyst のみ。watchOS SDK は無い** |
+| Apple の位置づけ | 「Critical Alerts や Time Sensitive Notification の置き換えではない」 |
+| スケジュール | 固定(絶対日時)/ 相対(タイムゾーン追従)/ カウントダウン |
+
+> **本線への影響: 無い。**
+> Watch 単独で鳴らす必要がある本アプリの主用途には使えない。
+> §7 の「通知連投 + Extended Runtime Session」という結論はそのまま生きている。
+
+> **★ §15.3(盗難検知)への影響: 大きい。**
+> こちらは **iPhone 側で鳴らす**筋書きなので、AlarmKit がそのまま使える。
+> 「ジオフェンスで起床 → AlarmKit で発報」なら、**Critical Alerts の個別申請なしに
+> 消音貫通の鳴りっぱなしアラームが成立する。** §15.6 の実装タスクに反映すること。
+
+なお「アラームは Apple Watch にも表示される」とされているが、
+これは iPhone が鳴らしたものが**ペアリング済みの Watch にミラーされる**という意味であり、
+Bluetooth が切れている状況で成立するかは未確認(§19.7-4)。
+
+### 18.5 `BGContinuedProcessingTask`(iOS 26+)は本アプリでは使えない
+
+同じく WWDC25 で追加。「前面で始めた処理を背景で完走させる」ための API だが、
+
+- **ユーザ操作起点であることが必須**(タップやスワイプへの直接の応答として submit する)
+- システムが進捗 UI を表示する
+- **サイレントな・投機的な利用は認められていない**
+
+→ 常駐監視には使えない。名前から期待しがちなので、明示的に否定しておく。
+
+### 18.6 §2.3 の表への補正
+
+拡張ランタイムセッションの種別は **6 つ**で、§2.3 の表には **`underwater-depth`** が漏れている。
+本アプリの用途には無関係だが、表の完全性のため記録する。
+
+---
+
+## 19. 背景・スリープ中の切断検知 — 役割ごとの可否と SDK 検証 ★(調査日 2026-09-02)
+
+方式1 の大前提「背景でもスリープでも切断を検知できる」を、公式文書と
+**`WatchOS26.5.sdk` のヘッダ実地確認**の両方で裏取りした。
+結論として**前提は成り立つが、役割によっては成り立たない**ことが分かった。
+
+### 19.1 結論
+
+| 役割 | 背景/スリープ中の切断検知 | 起床するか | 遅延 |
+|---|---|---|---|
+| **iPhone = central** | ⭕ できる | **起きる**(force-quit 後も状態復元で復帰) | 数秒 |
+| **iPhone = peripheral**(§3.1 案 A の構成) | ❌ **できない** | 起きない | ─ |
+| **Watch = central**(案 A / 案 C の構成) | ⭕ できる | **起きる。ただし枠の性質が違う** | 数秒 |
+| **Watch = peripheral** | ❌ そもそも不可(§19.5-1) | ─ | ─ |
+
+### 19.2 iPhone が central のとき ── 明確に可能
+
+Apple の Core Bluetooth 背景処理ドキュメントに明記がある。
+`UIBackgroundModes = [bluetooth-central]` を宣言すると、
+
+> システムは `CBCentralManagerDelegate` / `CBPeripheralDelegate` のデリゲートメソッドが
+> 呼ばれるときにアプリを起こす ──**接続が確立された時、または切断された時**、
+> characteristic の値が更新された時、など
+
+背景モードを宣言しない場合は全 Bluetooth イベントがキューイングされ、前面復帰まで配信されない。
+さらに `CBCentralManagerOptionRestoreIdentifierKey` による状態復元を入れると、
+**OS に終了させられた後でもアプリを再起動して切断イベントを配れる**
+(ユーザが手動 kill した場合は除く、§3.1)。
+
+### 19.3 ★ iPhone が peripheral のとき ── 切断を検知できない
+
+**今回の調査で最も重要な発見。** §3.1 の案 A では iPhone がペリフェラル役だが、
+**この役割には切断を知る API が無い。**
+
+- `CBPeripheralManagerDelegate` に `didDisconnect` に相当するメソッドが**存在しない**
+- Apple のドキュメントも、`bluetooth-peripheral` で起床するのは
+  「**read / write / subscription イベント**」とだけ書いており、**切断を挙げていない**
+- 実務では `peripheralManager(_:central:didUnsubscribeFrom:)` を切断検知に代用する例があるが、
+  Apple はこれを切断通知として文書化していない
+  (openradar rdar://24169259「CoreBluetooth does not report when peripheral devices disconnect」)
+
+> **設計上の含意(§3.1 への補正)**
+> 案 A において「離れた」を検知する責任は **100% Watch 側にある**。
+> **iPhone は自分が置き去りにされたことを知れない。**
+> この非対称性は §3.1 の表からは読み取れないので、実装前に必ず共有すること。
+>
+> §15.3 の盗難検知が BLE ではなく**ジオフェンス**(位置)に依っているのは、
+> この制約から見ても正しい判断だった。iPhone 側に BLE 起点の検知を期待してはいけない。
+
+### 19.4 Watch が central のとき ── 起きるが「再接続用の枠」
+
+WWDC22 のセッションを読み直したところ、**切断と notify とでは貰える背景実行の意味が違う。**
+
+| きっかけ | 貰えるもの | 5 回/24h の予算を消費するか |
+|---|---|---|
+| characteristic の値変化(notify / indicate) | 「時間に敏感な通知を出すための」実行枠 | **する** |
+| スキャン中のアドバタイズ発見 | 接続を開始するための枠 | **する** |
+| **切断(レンジ外)** | **`connectPeripheral` を呼んで再接続を試みるための短い枠** | セッションの記述上は別扱いに読める |
+
+セッションの記述:
+
+> デバイスがレンジ外に出ると、タイムアウト後に Bluetooth 接続が切断される。
+> その場合、アプリは再接続を試みるために `connectPeripheral` を呼ぶ**短い背景実行時間**を得る。
+
+つまり**切断で Watch アプリは確かに起きる**。ただしその枠は「再接続用」と位置づけられており、
+**そこでローカル通知を積めるかどうかは Apple の文言からは断定できない。**
+ここが方式1 の成否を分ける最大の未検証点である(§19.7-1)。
+
+### 19.5 SDK ヘッダの実地確認で分かったこと
+
+`/Applications/Xcode.app/.../WatchOS26.5.sdk` の `CoreBluetooth.framework/Headers` を直接読んだ。
+
+**(1) Watch はペリフェラルになれない ── SDK で裏取り完了**
+
+```objc
+- (instancetype)initWithDelegate:queue:options:
+    API_AVAILABLE(ios(6.0), macos(10.9)) API_UNAVAILABLE(watchos, tvos)
+```
+
+`CBPeripheralManager` は**イニシャライザ自体が watchOS で使用不可**であり、
+アドバタイズ以前にインスタンス化できない。§15.2 の注記と §3.1 の判断は正しい。
+
+**(2) ★ 切断時刻が取れる API がある(watchOS 10+)**
+
+```objc
+- (void)centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:
+//  timestamp: "Timestamp of the disconnection, it can be now or a few seconds ago"
+```
+
+背景起床は切断から数秒遅れるため、旧来の `didDisconnectPeripheral:error:` では
+**「いつ切れたか」が分からない**。§13.8 / §14.4 の遡及判定は
+「**切断時刻の前後 60 秒に歩数が増えているか**」を核にしているので、
+**この timestamp 版を使わないと判定の基準時刻がずれる。**
+→ P0 / P2 の実装では必ずこちらを採用する。
+
+**(3) システムによる自動再接続(watchOS 10+)**
+
+```objc
+CBConnectPeripheralOptionEnableAutoReconnect  NS_AVAILABLE(14_0, 17_0)
+```
+
+設定すると**切断後にシステムが自動で connect を呼び直す**。
+`isReconnecting` フラグで再接続中かどうかも分かる。
+§3.2 の猶予フェーズで自前に `connect` を張り直している部分を、OS 側に寄せられる可能性がある。
+ただし §17.5 の「境界での再接続繰り返しでレンジが縮む」挙動との相互作用は未確認。
+
+**(4) ★ 第二の切断検知経路が watchOS で使える**
+
+```objc
+- (void)registerForConnectionEventsWithOptions:
+    API_AVAILABLE(ios(13.0), tvos(13.0), watchos(6.0)) API_UNAVAILABLE(macos)
+```
+
+`CBConnectionEventPeerDisconnected` / `PeerConnected` を、
+サービス UUID やペリフェラル UUID のマッチで受け取れる。
+**自分が接続を保持していなくてもイベントが来る**仕組みで、**watchOS 6.0 以降で利用可能**。
+
+→ 背景 BLE 起床(§2.1、Series 6 / watchOS 9 要件)とは**別系統**なので、
+**手元の Apple Watch SE(第1世代)でも試せる可能性がある。**
+発火するなら、要件を満たさない機体でも方式1 が成立する道が開ける。**検証の優先度が高い。**
+
+### 19.6 G0-2 への部分回答
+
+> G0-2: 5 回/24h の予算が `didDisconnect` 起床も数えるか
+
+WWDC22 の説明を読む限り、**5 回の予算は「characteristic の値変化」と「スキャン発見」に
+対するもの**で、切断による再接続用の枠は別の扱いに読める。ただし**断定はできない。**
+§2.1 の「同じ枠を消費するとみなして設計するのが安全」という保守的な前提は維持する。
+
+### 19.7 残る未検証事項
+
+| # | 問い | 外れたときの影響 |
+|---|---|---|
+| 1 | **切断起床の「短い枠」でローカル通知を出せるか** | 出せなければ方式1 は「再接続を試して黙る」だけになる。**最優先** |
+| 2 | **`registerForConnectionEvents` が watchOS の背景で発火するか** | 発火すれば Series 6 未満でも方式1 が成立しうる。**現在の機体で試せる** |
+| 3 | `didUnsubscribeFrom` が iPhone ペリフェラル側で背景起床を伴って呼ばれるか | 呼ばれるなら §19.3 の非対称性が緩和される |
+| 4 | AlarmKit の Watch ミラーが Bluetooth 切断中にも成立するか(§18.4) | 成立しなければ本線とは完全に無関係 |
+
+2 と 3 は既存の `spike/peripheral-sim` を相手役にすればすぐ試せる。
+
+---
+
+## 20. 参考資料
 
 - [Get timely alerts from Bluetooth devices on watchOS — WWDC22](https://developer.apple.com/videos/play/wwdc2022/10135/)
 - [Connect Bluetooth devices to Apple Watch — WWDC21](https://developer.apple.com/videos/play/wwdc2021/10005/)
@@ -1912,3 +2275,15 @@ ANOS が非所有者デバイスに公開している opcode は次のとおり�
 - [Apple AirTag Reverse Engineering — Adam Catley](https://adamcatley.com/AirTag.html)(加速度センサのサンプリング挙動)
 - [AirGuard — TU Darmstadt SEEMOO](https://github.com/seemoo-lab/AirGuard)(第三者アプリにできる範囲の実装例)
 - [Find My network accessory program(MFi)](https://mfi.apple.com/)
+
+### §17〜§19 の追加調査(2026-09-02)
+
+- [About Bluetooth, Wi-Fi, and cellular on your Apple Watch — Apple サポート](https://support.apple.com/en-om/HT204562)(レンジを数値で定義していないことの根拠)
+- [Core Bluetooth Background Processing for iOS Apps — Apple](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/CoreBluetoothBackgroundProcessingForIOSApps/PerformingTasksWhileYourAppIsInTheBackground.html)(背景で起床する Bluetooth イベントの一覧)
+- [centralManager(\_:didDisconnectPeripheral:error:)](https://developer.apple.com/documentation/corebluetooth/cbcentralmanagerdelegate/centralmanager(_:diddisconnectperipheral:error:))
+- [peripheralManager(\_:central:didUnsubscribeFrom:)](https://developer.apple.com/documentation/corebluetooth/cbperipheralmanagerdelegate/peripheralmanager(_:central:didunsubscribefrom:))
+- [rdar://24169259 — CoreBluetooth does not report when peripheral devices disconnect](http://www.openradar.appspot.com/24169259)
+- [WKBluetoothAlertRefreshBackgroundTask](https://developer.apple.com/documentation/watchkit/wkbluetoothalertrefreshbackgroundtask)
+- [Wake up to the AlarmKit API — WWDC25 Session 230](https://developer.apple.com/videos/play/wwdc2025/230/) / [AlarmKit](https://developer.apple.com/documentation/alarmkit)
+- [Finish tasks in the background — WWDC25 Session 227](https://developer.apple.com/videos/play/wwdc2025/227/)(`BGContinuedProcessingTask`)
+- ローカル SDK: `WatchOS26.5.sdk` の `CoreBluetooth.framework/Headers`(`CBPeripheralManager.h` / `CBCentralManager.h` / `CBCentralManagerConstants.h`)および `WatchKit.framework/Headers/WKBackgroundTask.h`

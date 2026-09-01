@@ -12,13 +12,20 @@
 
 ## 0. 何を確かめるのか
 
-後続フェーズの設計を左右する 3 つの未知。**外れると P2 / P3 を作り直すことになります。**
+後続フェーズの設計を左右する未知。**外れると P2 / P3 を作り直すことになります。**
 
-| # | 問い | 外れたときの影響 |
-|---|---|---|
-| G0-1 | 背景 BLE 起床（`bluetooth-central` + notify）が実際に来るか | 来なければ方式1 が丸ごと成立しない |
-| G0-2 | 5 回/24h の予算が `didDisconnect` 起床も数えるか（設計 §10-2） | 数えるなら §6 の予算管理を大幅に厳しくする |
-| G0-3 | 背景起床 1 回の実行枠で歩数・活動の遡り問い合わせが返るか（§14.4） | 返らなければ P3 の遡及検出は前面専用に格下げ |
+| # | 問い | 機体要件 | 外れたときの影響 |
+|---|---|---|---|
+| G0-1 | 背景 BLE 起床（`bluetooth-central` + notify）が実際に来るか | Series 6+ / **保留** | 来なければ方式1 が丸ごと成立しない |
+| G0-2 | 5 回/24h の予算が `didDisconnect` 起床も数えるか（設計 §10-2） | Series 6+ / **保留** | 数えるなら §6 の予算管理を大幅に厳しくする |
+| G0-3 | 背景起床 1 回の実行枠で歩数・活動の遡り問い合わせが返るか（§14.4） | **現機体で可** | 返らなければ P3 の遡及検出は前面専用に格下げ |
+| **G0-4** | 切断起床で貰える「再接続用の短い枠」でローカル通知を積めるか（§19.4） | Series 6+ / 保留 | 積めなければ方式1 は「再接続を試して黙る」だけになる |
+| **G0-5** | `registerForConnectionEvents` が背景で発火するか（§19.5-4） | **現機体で試せる可能性** | 発火すれば Series 6 未満でも方式1 が成立する道が開ける |
+
+> **2026-09-02 追記**: G0-4 / G0-5 は追加調査（設計 §19）で浮上した問いです。
+> とくに **G0-5 は `watchos(6.0)` の API** で背景 BLE 起床（Series 6 要件）とは別系統のため、
+> **手元の Apple Watch SE(第1世代) でも試せる可能性があります。**
+> 保留中の G0-1 / G0-2 を迂回できるかもしれないので、**現時点で最も価値の高い計測**です。
 
 ---
 
@@ -318,6 +325,40 @@ ls -lT ~/Library/Developer/Xcode/watchOS\ DeviceSupport/
 | 背景での切断イベントが 5 件前後で止まり、`budgetExceeded` が出る | **切断起床も予算を消費する。** §6 の予算管理を厳しくする必要がある |
 | 8 回すべて記録され、`budgetExceeded` が出ない | 予算は notify 起床だけを数えている。設計どおり |
 
+### フェーズ C — `registerForConnectionEvents` は背景で発火するか（G0-5）★
+
+**このフェーズだけは Series 6 未満の機体でも試せる可能性があります。**
+背景 BLE 起床（`WKBluetoothAlertRefreshBackgroundTask`）とは別系統の API だからです。
+
+```swift
+// Watch 側。接続を保持していなくてもイベントが来るのが売り。
+central.registerForConnectionEvents(options: [
+    .peripheralUUIDs: [targetUUID]      // または .serviceUUIDs
+])
+
+func centralManager(_ c: CBCentralManager,
+                    connectionEventDidOccur event: CBConnectionEvent,
+                    for peripheral: CBPeripheral) {
+    // event == .peerDisconnected をログに残す
+}
+```
+
+1. Watch でアプリを開き、状態タブで **フェーズ C** を選ぶ
+2. Mac 側で接続を確立させる
+3. Watch のアプリを閉じ、放置する
+4. **Mac 側で `d` を 10 分おきに 8 回ほど押す**
+5. Watch でアプリを開き、集計タブを読む
+
+**読み取り方**
+
+| 結果 | 結論 |
+|---|---|
+| 背景で `.peerDisconnected` が記録されている | **★ 現機体でも切断検知が成立する。** G0-1 / G0-2 の保留を迂回できる |
+| 前面のときしか記録されない | 背景起床の手段としては使えない。Series 6 以降を待つほかない |
+| 予算らしき上限で止まる | 何件目で止まったかを記録する（別枠の予算がある可能性） |
+
+> 実装はまだありません。**このフェーズを回すには `Spike/` にフェーズ C を足す必要があります。**
+
 ### G0-3 — 遡り問い合わせは実行枠に収まるか
 
 フェーズ A / B の計測中に自動で測られます（起床のたびに 1 回）。
@@ -368,6 +409,16 @@ ls -lT ~/Library/Developer/Xcode/watchOS\ DeviceSupport/
 | 所要 最大 | |
 | **結論** | 枠内に返る / 返らない |
 
+### G0-5 `registerForConnectionEvents`（フェーズ C）
+
+| 項目 | 実測値 |
+|---|---|
+| 使用した機種 / watchOS | |
+| 背景で記録された `.peerDisconnected` の件数 | |
+| 前面で記録された件数 | |
+| 予算らしき上限で止まったか | |
+| **結論** | 背景で発火する / 前面のみ |
+
 ### 設計への反映
 
 | 反映先 | 内容 |
@@ -375,6 +426,7 @@ ls -lT ~/Library/Developer/Xcode/watchOS\ DeviceSupport/
 | §6 予算管理 | |
 | §13.6 背景更新の間隔 | |
 | §14.4 遡り問い合わせ | |
+| §19.5-4 `registerForConnectionEvents` の実用性 | |
 | P2 / P3 の設計変更 | |
 
 ---
