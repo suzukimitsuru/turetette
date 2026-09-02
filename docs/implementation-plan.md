@@ -55,12 +55,13 @@ G0 実機スパイク ──▶ P0 地固め ──▶ P1 鳴り続ける ──
 
 ### 前提条件(満たせないと成立しない)
 
-| 条件                                           | 理由                                                                        |
-| ---------------------------------------------- | --------------------------------------------------------------------------- |
-| **Apple Watch Series 6 以降 + watchOS 9 以降** | 背景 BLE 起床の動作要件(§2.1)。GPS 測位の機種差(§12.3-14)も同じ線で切れる   |
-| **実機での検証**(シミュレータ不可)             | 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない(§10-1) |
-| **文字盤にコンプリケーションを置いてもらう**   | 背景更新の予算がこれで決まる(§14.10)                                        |
-| iPhone 側は位置情報「常に許可」                | ジオフェンス盗難検知の前提(§15.3)                                           |
+| 条件                                           | 理由                                                                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Apple Watch Series 6 以降 + watchOS 9 以降** | 背景 BLE 起床の動作要件(§2.1)。GPS 測位の機種差(§12.3-14)も同じ線で切れる                                          |
+| **実機での検証**(シミュレータ不可)             | 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない(§10-1)                                        |
+| **文字盤にコンプリケーションを置いてもらう**   | 背景更新の予算がこれで決まる(§14.10)                                                                               |
+| iPhone 側は位置情報「常に許可」                | ジオフェンス盗難検知の前提(§15.3)                                                                                  |
+| **有料の Apple Developer Program**             | Time Sensitive capability の前提(§2.4 の訂正)。無料の Personal Team では集中モードを貫通できず、就寝中に無音になる |
 
 ---
 
@@ -117,16 +118,16 @@ G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留。
 **目的:** README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。
 現行実装は**画面が消えた瞬間に鳴り止む**(§9-6)。ここが製品の核。
 
-| ID   | 内容                                                                         | 対象                          | 出典     |
-| ---- | ---------------------------------------------------------------------------- | ----------------------------- | -------- |
-| P1-1 | `UNNotificationCategory`(`TURETETTE_ALARM`)と「停止」アクションの登録        | `AlarmManager`                | §2.4     |
-| P1-2 | **通知の連投**(5 秒間隔 × 48 発、`threadIdentifier` で束ねる)                | `AlarmManager`                | §7 段階2 |
-| P1-3 | **全 ID の一括キャンセル**(pending と delivered の両方)                      | `AlarmManager`                | §7       |
-| P1-4 | `interruptionLevel = .timeSensitive` + Time Sensitive capability             | `AlarmManager` / entitlements | §2.4     |
-| P1-5 | `WKExtendedRuntimeSession` でハプティクス継続 + `WKBackgroundModes` に適正値 | `AlarmManager`                | §7 段階3 |
-| P1-6 | 背景終了 → 前面化でのアラーム継続                                            | `AlarmManager`                | §9-7     |
-| P1-7 | 停止導線と状態表示の整理                                                     | `Views/AlarmView`             | ―        |
-| P1-8 | (任意)Critical Alerts entitlement の申請                                     | ―                             | §7 段階0 |
+| ID   | 内容                                                                                                                                                          | 対象                          | 出典     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------- |
+| P1-1 | `UNNotificationCategory`(`TURETETTE_ALARM`)と「停止」アクションの登録                                                                                         | `AlarmManager`                | §2.4     |
+| P1-2 | **通知の連投**(5 秒間隔 × 48 発、`threadIdentifier` で束ねる)                                                                                                 | `AlarmManager`                | §7 段階2 |
+| P1-3 | **全 ID の一括キャンセル**(pending と delivered の両方)                                                                                                       | `AlarmManager`                | §7       |
+| P1-4 | `interruptionLevel = .timeSensitive` + Time Sensitive capability。**★ 未完了。無料アカウントでは capability を付けられず集中モードを貫通しない**(§2.4 の訂正) | `AlarmManager` / entitlements | §2.4     |
+| P1-5 | `WKExtendedRuntimeSession` でハプティクス継続 + `WKBackgroundModes` に適正値                                                                                  | `AlarmManager`                | §7 段階3 |
+| P1-6 | 背景終了 → 前面化でのアラーム継続                                                                                                                             | `AlarmManager`                | §9-7     |
+| P1-7 | 停止導線と状態表示の整理                                                                                                                                      | `Views/AlarmView`             | ―        |
+| P1-8 | (任意)Critical Alerts entitlement の申請                                                                                                                      | ―                             | §7 段階0 |
 
 ### 注意（P1）
 

@@ -619,6 +619,7 @@ body {
       <li><b>実機での検証</b> — 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない（§10-1）</li>
       <li><b>文字盤にコンプリケーションを置いてもらう</b> — 無いと背景更新が 1 時間に 1 回まで落ちる（§14.10）</li>
       <li>iPhone 側は位置情報「常に許可」 — ジオフェンス盗難検知の前提（§15.3）</li>
+      <li><b>有料の Apple Developer Program</b> — Time Sensitive capability の前提（<a href="watch-alarm-design.md">docs/watch-alarm-design.md</a> §2.4 の訂正）。無料の Personal Team では集中モードを貫通できず、就寝中に無音になる</li>
     </ul>
   </section>
 
@@ -703,12 +704,12 @@ const PLAN = [
   },
   {
     id: "P1", kind: "main", title: "止めるまで鳴るアラーム",
-    goal: "README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。<b>現行実装は画面が消えた瞬間に鳴り止む。ここが製品の核。</b><br>背景 BLE 起床を使わないため<b>手元の SE(第1世代)でも実機検証でき、G0 の完了を待たずに進められる</b>ので前倒しした。",
+    goal: "README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。<b>現行実装は画面が消えた瞬間に鳴り止む。ここが製品の核。</b><br>背景 BLE 起床を使わないため<b>手元の SE(第1世代)でも実機検証でき、G0 の完了を待たずに進められる</b>ので前倒しした。<br><b>★ P1-4 が未完了のため未達。</b>Time Sensitive の capability は<b>有料の Apple Developer Program が要る</b>と実機で判明した。無料アカウントのままでは<b>就寝モード中にアラームが無音になる</b>。",
     tasks: [
       { id: "P1-1", s: "done", t: "<code>UNNotificationCategory</code> と「停止」アクションの登録", tgt: "AlarmManager", ref: "§2.4" },
       { id: "P1-2", s: "done", t: "<b>通知の連投</b>（5 秒間隔 × 48 発、<code>threadIdentifier</code> で束ねる）", tgt: "AlarmManager", ref: "§7 段階2" },
       { id: "P1-3", s: "done", t: "<b>全 ID の一括キャンセル</b>（pending と delivered の両方）", tgt: "AlarmManager", ref: "§7" },
-      { id: "P1-4", s: "done", t: "<code>interruptionLevel = .timeSensitive</code> と capability の付与", tgt: "entitlements", ref: "§2.4" },
+      { id: "P1-4", s: "todo", t: "<code>interruptionLevel = .timeSensitive</code> と capability の付与 — <b>★ capability が未付与。無料の Personal Team は非対応で、集中モード中はアラームが無音になる</b>（<a href=\"watch-alarm-design.md\">docs/watch-alarm-design.md</a> §2.4 の訂正）", tgt: "entitlements", ref: "§2.4" },
       { id: "P1-5", s: "done", t: "<code>WKExtendedRuntimeSession</code> でハプティクス継続（前面で開始）", tgt: "AlarmManager", ref: "§7 段階3" },
       { id: "P1-6", s: "done", t: "背景終了 → 前面化でのアラーム継続", tgt: "AlarmManager", ref: "§9-7" },
       { id: "P1-7", s: "done", t: "停止導線と状態表示の整理", tgt: "AlarmView", ref: "—" },
@@ -717,7 +718,8 @@ const PLAN = [
     dod: [
       "画面を消したまま 4 分以上鳴り続ける",
       "「停止」を押すと通知センターに 1 件も残らない",
-      "通知タップ → 前面化 → 停止するまで無限にハプティクスが続く"
+      "通知タップ → 前面化 → 停止するまで無限にハプティクスが続く",
+      "<b>集中モード（就寝モードを含む）中でも鳴る</b> — P1-4 の capability が前提"
     ]
   },
   {

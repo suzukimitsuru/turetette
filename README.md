@@ -46,10 +46,20 @@ turetette/
 
 ### アラーム
 
+止めるまで鳴り続けるアラームを 3 段構えで実装しています(設計 §7)。
+
 - BLE距離超過 × モーション検知で発動
-- `WKInterfaceDevice.play()` によるハプティクス(2秒おきに繰り返し)
-- 手動で「停止」ボタンを押すまで継続
+- **ローカル通知の連投**(5 秒間隔 × 48 発)で、画面が消えていても鳴らし続ける
+- **`WKExtendedRuntimeSession`** で、前面化した後は止めるまでハプティクスを継続
+- 通知の「停止」アクションから、アプリを開かずに止められる
 - 全画面アラーム表示(赤背景 + 停止ボタン)
+
+> **既知の制限**: 集中モード(就寝モードを含む)を貫通するには
+> Time Sensitive Notifications capability が必要ですが、
+> **無料の Personal Team では付与できません**(有料の Apple Developer Program が必要)。
+> 現状は**集中モード中にアラームが無音になります**。
+> 詳細は [docs/watch-alarm-design.md](docs/watch-alarm-design.md) §2.4 と
+> [docs/roadmap.html](docs/roadmap.html) の P1-4 を参照してください。
 
 ## 設計ドキュメント
 

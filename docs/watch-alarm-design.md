@@ -203,7 +203,7 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 | 手段                                                                    | 消音/集中モードの貫通                                      | 追加要件                                                                                                                                                                                                                                                                |
 | ----------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 通常のローカル通知                                                      | しない                                                     | なし                                                                                                                                                                                                                                                                    |
-| `interruptionLevel = .timeSensitive`                                    | 集中モードを貫通                                           | Time Sensitive Notifications capability(Xcode で自己付与可)                                                                                                                                                                                                             |
+| `interruptionLevel = .timeSensitive`                                    | 集中モードを貫通                                           | Time Sensitive Notifications capability。**★ 有料の Apple Developer Program が必要**（無料の Personal Team は非対応。2026-09-03 実機で確認）                                                                                                                            |
 | `interruptionLevel = .critical` + `UNNotificationSound.defaultCritical` | **消音スイッチ・おやすみモードも貫通、画面点灯、音量固定** | `com.apple.developer.usernotifications.critical-alerts` entitlement — [Apple への個別申請](https://developer.apple.com/contact/request/notifications-critical-alerts-entitlement/) が必要で、承認対象は極めて限定的。ユーザ許可も `.criticalAlert` オプションで別途取得 |
 
 その他の実務上の制限：
@@ -541,13 +541,28 @@ final class AlarmRuntime: NSObject, WKExtendedRuntimeSessionDelegate {
 | ------------------------------------------- | ----------------- | ------------------- | ------------------------------- | -------------------------------------- |
 | ローカル通知 1 発                           | ○                 | 単発                | なし                            | 低                                     |
 | 通知の連投(48〜64 発)                       | ○                 | 実質 4〜5 分/バッチ | なし                            | 低                                     |
-| Time Sensitive                              | ○(集中モード貫通) | 同上                | capability 自己付与             | 低                                     |
+| Time Sensitive                              | ○(集中モード貫通) | 同上                | **有料アカウント**              | 低                                     |
 | Critical Alert                              | ○(消音も貫通)     | 同上                | **Apple への申請**              | 高(承認制)                             |
 | 前面 + `Timer` + `WKInterfaceDevice.play()` | **×**(消灯で停止) | 前面の間だけ        | なし                            | 低                                     |
 | Extended Runtime(physical-therapy 等)       | ○                 | 最大 1 時間         | `WKBackgroundModes`、前面で開始 | 中(用途との整合)                       |
 | Extended Runtime(smart alarm)               | ○                 | 30 分               | 前面で 36h 以内を予約           | 中(イベント駆動に不向き)               |
 | `HKWorkoutSession` 常駐                     | ○                 | 実質無制限          | `workout-processing`            | **高**(電池・アクティビティ汚染・審査) |
 
+> **★ 訂正(2026-09-03、実機で判明)**: Time Sensitive の capability は
+> **無料の Personal Team では付けられない。**
+> `.entitlements` を組み込むとプロビジョニングの生成に失敗し、ビルドが通らなくなる。
+>
+> ```text
+> Personal development teams ... do not support the
+> Time Sensitive Notifications capability.
+> ```
+>
+> → **無料アカウントのままでは、アラームは集中モードを貫通しない。**
+> 就寝モード中の置き忘れ検知という本アプリの主用途に直撃するため、
+> **有料の Apple Developer Program への加入が実質的な前提条件**になる。
+> `TuretetteWatch.entitlements` は用意済みで、加入後に
+> `CODE_SIGN_ENTITLEMENTS` へ設定すれば有効になる。
+>
 > 現行の `AlarmManager` は「前面で Timer + `play()`」+「背景ならローカル通知 1 発」なので、
 > **画面が消えた瞬間に鳴り止む**。要件「止めるまで鳴らす」を満たしていない。
 

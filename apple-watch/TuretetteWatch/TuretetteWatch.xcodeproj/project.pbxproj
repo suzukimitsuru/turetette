@@ -36,6 +36,7 @@
 		AA000007000000000000000 /* AlarmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmView.swift; sourceTree = "<group>"; };
 		AA000008000000000000000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA000009000000000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA00000900000000000000E /* TuretetteWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TuretetteWatch.entitlements; sourceTree = "<group>"; };
 		AA00000A000000000000000 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AA00000B000000000000000 /* AppNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotifications.swift; sourceTree = "<group>"; };
 		AA00000C000000000000000 /* SpikeLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeLog.swift; sourceTree = "<group>"; };
@@ -77,6 +78,7 @@
 				CC000004000000000000000 /* Spike */,
 				AA000008000000000000000 /* Assets.xcassets */,
 				AA000009000000000000000 /* Info.plist */,
+				AA00000900000000000000E /* TuretetteWatch.entitlements */,
 			);
 			path = TuretetteWatch;
 			sourceTree = "<group>";
