@@ -1,5 +1,6 @@
 import Foundation
 import WatchKit
+import os
 
 /// G0 実機スパイク — 使い捨ての計測用ログ。
 ///
@@ -36,7 +37,22 @@ enum SpikeConfig {
     static let lookbackWindow: TimeInterval = 180
 
     /// 保持するイベント数の上限。
-    static let maxEvents = 1500
+    ///
+    /// 1 回の切断で複数のイベントが出るため、1500 では 2 時間ももたなかった
+    /// （2026-09-03 の第 1 回で 01:00 より前が失われた）。第 2 回に向けて広げる。
+    static let maxEvents = 8000
+
+    /// `os_log` のサブシステム。
+    ///
+    /// **Watch 単体ではログを取り出せない**ため、`UserDefaults` と併せて
+    /// `os_log` にも流す。Mac 側からはこう読む。
+    ///
+    /// ```text
+    /// log stream --predicate 'subsystem == "com.turetette.watch.spike"'
+    /// ```
+    ///
+    /// Console.app でペアリング済みの Watch を選んでも同じものが見える。
+    static let logSubsystem = "com.turetette.watch.spike"
 }
 
 // MARK: - イベント
@@ -87,10 +103,40 @@ final class SpikeLog {
     // MARK: 書き込み
 
     /// イベントを 1 件記録する。バックグラウンドから呼ばれるので即時に永続化する。
+    /// `os_log` の出口。Watch の中の `UserDefaults` を Mac から読む手段が無いため併用する。
+    static let osLog = Logger(subsystem: SpikeConfig.logSubsystem, category: "g0")
+
+    /// 集計の全文を `os_log` へ吐く。Watch の画面を書き写さずに Mac 側で受け取るため。
+    ///
+    /// 1 行ずつ出すのは、`log stream` の 1 メッセージあたりの長さ制限を避けるため。
+    func dumpSummaryToOSLog() {
+        Self.osLog.notice("---- 集計ここから ----")
+        for line in summaryText().split(separator: "\n", omittingEmptySubsequences: false) {
+            Self.osLog.notice("\(String(line), privacy: .public)")
+        }
+        Self.osLog.notice("---- 集計ここまで ----")
+    }
+
+    /// 保存済みイベントを古い順に `os_log` へ吐く。時刻の分布を Mac 側で見るため。
+    func dumpEventsToOSLog() {
+        let all = queue.sync { loadRaw() }
+        Self.osLog.notice("---- イベント \(all.count) 件ここから ----")
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm:ss"
+        for e in all {
+            Self.osLog.notice(
+                "\(f.string(from: e.at), privacy: .public) \(e.kind.rawValue, privacy: .public) [\(e.appState, privacy: .public)] \(e.detail, privacy: .public)")
+        }
+        Self.osLog.notice("---- イベントここまで ----")
+    }
+
     func add(_ kind: SpikeEvent.Kind, _ detail: String = "") {
         // アプリ状態はメインスレッドからしか読めないため、呼び出し元の文脈で先に確定させる
         let state = Self.currentAppState()
         let event = SpikeEvent(id: UUID(), at: Date(), kind: kind, detail: detail, appState: state)
+
+        // Mac から取り出せる経路。UserDefaults は Watch の中にしか無いため併用する。
+        Self.osLog.notice("\(kind.rawValue, privacy: .public) [\(state, privacy: .public)] \(detail, privacy: .public)")
 
         queue.sync {
             var all = loadRaw()

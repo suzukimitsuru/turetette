@@ -106,6 +106,20 @@ struct SpikeView: View {
                     Label("更新", systemImage: "arrow.clockwise")
                 }
 
+                // Watch の画面を書き写さずに Mac 側で受け取るための出口。
+                // Mac 側: log stream --predicate 'subsystem == "com.turetette.watch.spike"'
+                Button {
+                    SpikeLog.shared.dumpSummaryToOSLog()
+                } label: {
+                    Label("集計を Mac へ", systemImage: "square.and.arrow.up")
+                }
+
+                Button {
+                    SpikeLog.shared.dumpEventsToOSLog()
+                } label: {
+                    Label("全イベントを Mac へ", systemImage: "square.and.arrow.up.on.square")
+                }
+
                 Button(role: .destructive) {
                     SpikeLog.shared.clear()
                     refresh()

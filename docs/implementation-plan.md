@@ -118,16 +118,17 @@ G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留。
 **目的:** README が約束している「手動で停止するまで鳴り続ける」を実際に満たす。
 現行実装は**画面が消えた瞬間に鳴り止む**(§9-6)。ここが製品の核。
 
-| ID   | 内容                                                                                                                                                          | 対象                          | 出典     |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------- |
-| P1-1 | `UNNotificationCategory`(`TURETETTE_ALARM`)と「停止」アクションの登録                                                                                         | `AlarmManager`                | §2.4     |
-| P1-2 | **通知の連投**(5 秒間隔 × 48 発、`threadIdentifier` で束ねる)                                                                                                 | `AlarmManager`                | §7 段階2 |
-| P1-3 | **全 ID の一括キャンセル**(pending と delivered の両方)                                                                                                       | `AlarmManager`                | §7       |
-| P1-4 | `interruptionLevel = .timeSensitive` + Time Sensitive capability。**★ 未完了。無料アカウントでは capability を付けられず集中モードを貫通しない**(§2.4 の訂正) | `AlarmManager` / entitlements | §2.4     |
-| P1-5 | `WKExtendedRuntimeSession` でハプティクス継続 + `WKBackgroundModes` に適正値                                                                                  | `AlarmManager`                | §7 段階3 |
-| P1-6 | 背景終了 → 前面化でのアラーム継続                                                                                                                             | `AlarmManager`                | §9-7     |
-| P1-7 | 停止導線と状態表示の整理                                                                                                                                      | `Views/AlarmView`             | ―        |
-| P1-8 | (任意)Critical Alerts entitlement の申請                                                                                                                      | ―                             | §7 段階0 |
+| ID   | 内容                                                                                                                                                          | 対象                          | 出典        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------- |
+| P1-1 | `UNNotificationCategory`(`TURETETTE_ALARM`)と「停止」アクションの登録                                                                                         | `AlarmManager`                | §2.4        |
+| P1-2 | **通知の連投**(5 秒間隔 × 48 発、`threadIdentifier` で束ねる)                                                                                                 | `AlarmManager`                | §7 段階2    |
+| P1-3 | **全 ID の一括キャンセル**(pending と delivered の両方)                                                                                                       | `AlarmManager`                | §7          |
+| P1-4 | `interruptionLevel = .timeSensitive` + Time Sensitive capability。**★ 未完了。無料アカウントでは capability を付けられず集中モードを貫通しない**(§2.4 の訂正) | `AlarmManager` / entitlements | §2.4        |
+| P1-5 | `WKExtendedRuntimeSession` でハプティクス継続 + `WKBackgroundModes` に適正値                                                                                  | `AlarmManager`                | §7 段階3    |
+| P1-6 | 背景終了 → 前面化でのアラーム継続                                                                                                                             | `AlarmManager`                | §9-7        |
+| P1-7 | 停止導線と状態表示の整理                                                                                                                                      | `Views/AlarmView`             | ―           |
+| P1-9 | **集中モード中は通知が配信されない前提での縮退**。UI に警告を出し、通知に依存しない経路(Extended Runtime のハプティクス)を主経路として扱えるようにする        | `AlarmManager` / `Views/`     | §2.4 の訂正 |
+| P1-8 | (任意)Critical Alerts entitlement の申請                                                                                                                      | ―                             | §7 段階0    |
 
 ### 注意（P1）
 
@@ -140,6 +141,23 @@ G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留。
 - 画面を消したまま 4 分以上鳴り続ける
 - 「停止」を押すと**通知センターに 1 件も残らない**
 - 通知タップ → 前面化 → 停止するまで無限にハプティクスが続く
+
+---
+
+### 有料アカウントに加入したらやること
+
+P1-4 はアカウント待ちで止まっている。加入後の手順を先に書いておく。
+
+| #   | 作業                                                                                                                      |
+| --- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Xcode → TuretetteWatch ターゲット → Signing & Capabilities → Team を有料アカウントに切り替える                            |
+| 2   | Build Settings の `CODE_SIGN_ENTITLEMENTS` に `TuretetteWatch/TuretetteWatch.entitlements` を設定する(ファイルは用意済み) |
+| 3   | ビルドが通ることを確認する。通らなければプロビジョニングの再生成を待つ                                                    |
+| 4   | **就寝モードを有効にしたまま実機でアラームを鳴らし、貫通することを確認する**                                              |
+| 5   | P1-4 を done に戻し、P1-9 の縮退 UI の文言を見直す                                                                        |
+
+> 4 の確認までやって初めて P1-4 は完了とする。
+> **書いただけで done にしたのが今回の原因**なので、実機での確認を完了条件に含める。
 
 ---
 
