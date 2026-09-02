@@ -11,61 +11,61 @@
 
 ## 0. 結論(TL;DR)
 
-- 1. **アラームの生成は必ず Apple Watch 側で行う。
-  - ** iPhone 側からの通知は「iPhone と Watch がつながっている」ことが前提であり、切断・遠距離という今回の発報条件下では届かない(§1)。
+- **1. アラームの生成は必ず Apple Watch 側で行う。**
+  - iPhone 側からの通知は「iPhone と Watch がつながっている」ことが前提であり、切断・遠距離という今回の発報条件下では届かない(§1)。
   - したがって iPhone の役割は「BLE ペリフェラルとして接続を維持する」「切れる前に自分の位置をWatch へ渡しておく」の 2 つに限定される。どちらもスリープ中のバックグラウンドで実行可能。
-- 2. **方式1(BLE 切断)を一次トリガ、方式2(GPS 距離)を確証フィルタとして併用する**のが最良。
+- **2. 方式1(BLE 切断)を一次トリガ、方式2(GPS 距離)を確証フィルタとして併用する**のが最良。
   - 方式1 は即応性が高いが誤検知が多く、方式2 は誤検知に強いが単独では Watch を起床できない(watchOS にはジオフェンス／大幅位置変更の API が存在しない、§2.2)。
   - 両者は補完関係にある。
-- 3. **「止めるまで鳴らす」は単一 API では実現できない。
-  - ** 段階的に鳴らし続ける多段設計が必要(§7)。
+- **3. 「止めるまで鳴らす」は単一 API では実現できない。**
+  - 段階的に鳴らし続ける多段設計が必要(§7)。
   - entitlement 追加なしで実用になるのは「ローカル通知の連投→ ユーザ操作でアプリ前面化 → Extended Runtime Session で無限ハプティクス」の組み合わせ。
   - 理想形は Critical Alerts entitlement の取得(Apple への個別申請が必要)。
-- 4. **watchOS のバックグラウンド BLE 起床は 24 時間で 5 回**という厳しい予算がある(§2.1)。
+- **4. watchOS のバックグラウンド BLE 起床は 24 時間で 5 回**という厳しい予算がある(§2.1)。
   - 「切れたら即アラーム」を無条件に実装すると 1 日で予算を使い切るため、予算管理の設計が必須。
-- 5. 現行コードには、この設計に進む前に直すべきバグ・無効設定が数点ある(§9)。
-- 6. **Apple Watch が GPS + Cellular モデルなら、上記に「サーバ中継」という第3の経路が加わる**(§11)。
+- **5.** 現行コードには、この設計に進む前に直すべきバグ・無効設定が数点ある(§9)。
+- **6. Apple Watch が GPS + Cellular モデルなら、上記に「サーバ中継」という第3の経路が加わる**(§11)。
   - §1 の「iPhone → Watch の通知経路は無い」はローカル経路に限った話で、Watch が自前の回線を持てば iPhone →サーバ→ APNs → Watch が成立し、BLE の背景起床予算もジオフェンス非対応も回避できる。
   - ただし方式1・方式2 の設計自体は変わらず、サーバ基盤とプライバシー方針の変更という重いコストが乗るため、**ローカル完結版を本線、サーバ版を上乗せ**とするのが妥当。
-- 7. **GPS 距離(方式2)は「発報」ではなく「抑制」に使う**(§12)。
+- **7. GPS 距離(方式2)は「発報」ではなく「抑制」に使う**(§12)。
   - 位置で起床できず、下限しきい値が 100〜200m、屋内で測位できず、背景実行枠内に測位が返らない可能性が高い。
   - 一方「Bluetooth が切れただけ(OFF / 電池切れ / 遮蔽)」を黙らせる能力は方式1 に無い唯一の価値。
   - 判定は `遠い / 近い / 判定不能` の 3 値で返し、**判定不能は必ず「鳴る」側へ倒す**。
   - 「iPhone だけが動く」置き引きは方式2 では原理的に検出できない(§12.1-2)。埋められるのはサーバ経路のみ。
-- 8. **モーション(移動開始)は、位置と同じく Watch を起床できない**(§13.4)。
+- **8. モーション(移動開始)は、位置と同じく Watch を起床できない**(§13.4)。
   - よって「移動を始めたら検出モードへ移る」は、前面/拡張ランタイム中は即応、
     背景では**起床時に `queryPedometerData` / `queryActivityStarting` で過去へ遡る**、という二枚看板になる。
   - 遡り問い合わせはセンサを起こさないため、GPS と違って背景実行枠の中で完結できる。方式2 より扱いやすい。
   - 監視レベル L0 静穏 / L1 活動 / L2 離脱窓を **§6 の状態機械と直交**に持ち、猶予秒数と BAR 間隔を伸縮させる。
   - 「机に iPhone を置いて席を立つ」は、切断イベントを保留して**移動開始で成立させる遅延発報**で拾う(§13.8)。
-- 9. **距離判定の主役は GPS ではなく `CMPedometer` の積算歩行距離にすべき**(§14)。
+- **9. 距離判定の主役は GPS ではなく `CMPedometer` の積算歩行距離にすべき**(§14)。
   - 経路長 L は変位 d の上界(`L ≥ d`)なので、**「L < しきい値 ⟹ 近い」は方向に依らず厳密に成立する**。
     GPS の「近い」が精度円ぶん曖昧なのに対し、こちらは保証になる。
   - しかも **屋内でも測れる / TTFF が無く背景枠内に返る / 電池を食わない / 検出下限が数十 m** と、
     §12 で挙げた GPS の欠点のほとんどが消える。→ **方式2 は「無くても成立する機能」に格下げできる**(§14.7)。
   - 発報側には経路長だけでなく**連続歩行時間**を併用する(その場を歩き回っても L は貯まるため)。
-- 10. **watchOS の背景更新には「文字盤にコンプリケーションがあること」が事実上の前提**(§14.10)。
+- **10. watchOS の背景更新には「文字盤にコンプリケーションがあること」が事実上の前提**(§14.10)。
   - Dock 内で 1 時間に 1 回、コンプリケーションありで 1 時間に数回。**実質的な下限は 15 分**。
   - `HKObserverQuery` + 背景配信を使えば**歩数の書き込みで起床できる**が、同じ予算を共有する(§14.9)。
-- 11. **iPhone も Core Motion では起床できない。** ただし iOS には代替経路が豊富にある(§15)。
+- **11. iPhone も Core Motion では起床できない。** ただし iOS には代替経路が豊富にある(§15)。
   - **「置かれた地点に半径 100〜150m のジオフェンスを張り、出たら起きる」が盗難検知の実用解**(§15.3)。
     アプリが終了していても iOS が起こすため、Core Motion にできないことができる。
   - 起床後に「**歩数 0 なのに位置が動いた**」が取れれば、盗難の強い証拠になる(§15.4)。
   - **Apple Watch は iBeacon になれない**(watchOS は `CBPeripheralManager` のアドバタイズ非対応)。
-- 12. **AirTag はモーションを検知しているが、外部に通知する手段は無い**(§16)。
+- **12. AirTag はモーションを検知しているが、外部に通知する手段は無い**(§16)。
   - 音を鳴らすだけで電波には乗らない。DULT の非所有者向け GATT にもモーション関連の命令は無い。
   - **識別子が約 15 分で回転するため、そもそも「自分の AirTag」を追跡対象にできない。**
   - 代わりに**モーション付きの汎用 BLE タグ**を使えば、タグ側 × Watch 側の動きの 2×2 で
     **置き忘れと盗難を、距離もしきい値も無しに区別できる**(§16.5)。
-- 13. **「何 m で切れるか」は決まらない。切断は距離ではなく supervision timeout で起きる**(§17)。
+- **13. 「何 m で切れるか」は決まらない。切断は距離ではなく supervision timeout で起きる**(§17)。
   - 公称 10m、屋外で 30〜70m、屋内では 5〜15m。Apple 自身がレンジを数値で定義していない。
   - RSSI は静止していても 5〜10dB 揺れ、距離換算では 2〜3 倍の誤差になる。
   - **切断は「離脱の証拠」ではなく「離脱の疑いの発生」**でしかない。
   - `txPower = -59` / `n = 2.0` は自由空間の値。**実機で較正しないと 2m しきい値は根拠を持たない**(§17.6)。
-- 14. **AlarmKit(iOS 26+)は本線には使えないが、盗難検知(§15.3)には使える**(§18.4)。
+- **14. AlarmKit(iOS 26+)は本線には使えないが、盗難検知(§15.3)には使える**(§18.4)。
   - 消音・集中モードを貫通する鳴りっぱなしアラームが、**Critical Alerts の個別申請なしに**作れる。
   - ただし **iOS / iPadOS 専用で watchOS SDK が無い**ため、Watch 単独で鳴らす §7 の結論は変わらない。
-- 15. **背景での切断検知は「役割」に依存する。iPhone はペリフェラル役だと切断を検知できない**(§19)★。
+- **15. 背景での切断検知は「役割」に依存する。iPhone はペリフェラル役だと切断を検知できない**(§19)★。
   - `CBPeripheralManagerDelegate` に切断に相当するメソッドが無く、
     背景起床も read / write / subscribe のみ。→ **案 A では検知責任は 100% Watch 側にある。**
   - Watch は切断で起きるが、それは**「再接続を試みるための短い枠」**であって
@@ -263,7 +263,7 @@ WWDC22「Get timely alerts from Bluetooth devices on watchOS」より。
 
 ### 3.2 検知の流れ
 
-```
+```text
 接続維持(Watch = Central)
   ├─ 正常時：ハートビート characteristic の notify を低頻度で受信
   ├─ 切断時：
@@ -280,6 +280,7 @@ BLE の切断検知そのものは、Link Layer の **supervision timeout(実測
 即応性は十分。問題は精度側にある。
 
 > **★ 実装上の必須事項(§19.5)**
+>
 > - 旧来の `didDisconnectPeripheral:error:` ではなく、
 >   **`centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:`** を使う
 >   (可用性注釈が無く watchOS 9.0 ターゲットのままビルドできる。§19.5-2 の訂正を参照)。
@@ -318,7 +319,7 @@ BLE の切断は「離れた」以外の理由でも日常的に起きる。
 
 離れてからでは通信できないので、**接続中に継続的に最新位置を Watch へ push しておく**のが基本。
 
-**iPhone 側(スリープ中でも動く経路)**
+#### iPhone 側(スリープ中でも動く経路)
 
 ```swift
 // 省電力：大幅位置変更のみ。サスペンド・強制終了後でもアプリを背景起動できる(iOS のみ)
@@ -342,7 +343,7 @@ func locationManager(_ m: CLLocationManager, didUpdateLocations locs: [CLLocatio
 - 位置が動かない(=iPhone が机の上にある)ときは SLC が発火しないので、
   「一定時間ごとに 1 回は送る」ハートビートも入れて鮮度と生存確認を兼ねる。
 
-**Watch 側**
+#### Watch 側
 
 ```swift
 func session(_ s: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
@@ -441,7 +442,7 @@ stateDiagram-v2
 | Confirming | `requestLocation()`、再接続可否、モーション状態確認             | 同じ起床枠の中で完結させる |
 | Alarming   | 通知連投 +(前面化後)Extended Runtime Session でハプティクス継続 | —                          |
 
-**背景予算(5 回/24h)の管理**
+### 背景予算(5 回/24h)の管理
 
 - `LeGattNearBackgroundNotificationLimit` / `LeGattExceededBackgroundNotificationLimit` を購読し、
   残弾が少ないときは「切断即起床」をやめて Background App Refresh 主体に落とす。
@@ -1123,7 +1124,7 @@ L2 の存在理由は「歩き出した直後こそ置き忘れが確定する�
 3. その状態が**連続 5 秒以上**、**または**直近 30 秒の歩数が 10 歩以上(`CMPedometer`)
 4. 直前が `stationary`(または `unknown` が 3 分以上継続)
 
-**`automotive` の扱い**
+#### `automotive` の扱い
 
 - **移動に含める。** 「車内に iPhone を置いて給油・買い物に行く」が本命ユースケース。
 - ただし L2 の猶予は 8 秒 → 20 秒に緩める(車内は金属遮蔽と始動時のノイズで切断しやすい)。
@@ -1131,13 +1132,13 @@ L2 の存在理由は「歩き出した直後こそ置き忘れが確定する�
   これが「降車」であり、車に置き忘れる瞬間そのもの。
   現行実装は `stationary → walking` しか見ていないので、降車を取り落とす。
 
-**`unknown` の扱い**
+#### `unknown` の扱い
 
 現行の `handleActivityUpdate` は `unknown` を受け取ると
 `previousActivityWasStationary = false` になり、以後 `stationary → walking` の
 立ち上がりを検出できなくなる。**`unknown` では状態を遷移させず、直前の状態を維持する**のが正しい。
 
-**非対称ヒステリシス(重要)**
+#### 非対称ヒステリシス(重要)
 
 - **移動開始は速く**(5 秒 / 10 歩)
 - **静止復帰は遅く**(`stationary` かつ `confidence ≧ .medium` が **3 分継続**)
@@ -1446,7 +1447,7 @@ func onBecameActive(reason: WakeReason) {
 
 ### 14.4 遡及再構成の手順
 
-```
+```text
 1. t0 = pendingDisconnectAt ?? lastSeenAt      // 「最後に一緒だった時刻」
    now = Date()
 2. gap = now - t0
@@ -1871,7 +1872,7 @@ ANOS が非所有者デバイスに公開している opcode は次のとおり�
 
 ### 16.5 案 A を採る場合の仕様
 
-**タグ側**
+#### タグ側
 
 - 加速度センサで **「静止 → 移動」の立ち上がり**を検出する
 - **立ち上がりで 1 回だけ notify する。** 動いている間ずっと notify すると
@@ -1880,7 +1881,7 @@ ANOS が非所有者デバイスに公開している opcode は次のとおり�
 - ハートビート notify は別の characteristic に分け、低頻度で出す(§3.1)
 - 電池を考えると、加速度センサの割り込み(wake-on-motion)で MCU を起こす構成にする
 
-**Watch 側**
+#### Watch 側（16.5）
 
 - タグからの motion notify で背景起床 → **§14.4 の遡及判定を実行**
 - ここで初めて、**タグ側のモーションと Watch 側のモーションを突き合わせられる**
@@ -1898,7 +1899,7 @@ ANOS が非所有者デバイスに公開している opcode は次のとおり�
 > **モーション付きタグを使えば、iPhone もサーバも GPS も無しに、その区別が直接つく。**
 > しかも判定材料はどちらも「動いたかどうか」だけで、距離もしきい値も要らない。
 
-**注意点**
+#### 注意点
 
 - タグ側の notify は §2.1 の予算(5 回/24h)を消費する。**「立ち上がりで 1 回」を守ること**が
   仕様の中心であり、ここを守れないタグは使えない
@@ -2068,7 +2069,7 @@ WWDC25 で追加された新フレームワークで、**サードパーティ�
 > **本線への影響: 無い。**
 > Watch 単独で鳴らす必要がある本アプリの主用途には使えない。
 > §7 の「通知連投 + Extended Runtime Session」という結論はそのまま生きている。
-
+>
 > **★ §15.3(盗難検知)への影響: 大きい。**
 > こちらは **iPhone 側で鳴らす**筋書きなので、AlarmKit がそのまま使える。
 > 「ジオフェンスで起床 → AlarmKit で発報」なら、**Critical Alerts の個別申請なしに
@@ -2167,7 +2168,7 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 
 `/Applications/Xcode.app/.../WatchOS26.5.sdk` の `CoreBluetooth.framework/Headers` を直接読んだ。
 
-**(1) Watch はペリフェラルになれない ── SDK で裏取り完了**
+#### (1) Watch はペリフェラルになれない ── SDK で裏取り完了
 
 ```objc
 - (instancetype)initWithDelegate:queue:options:
@@ -2177,7 +2178,7 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 `CBPeripheralManager` は**イニシャライザ自体が watchOS で使用不可**であり、
 アドバタイズ以前にインスタンス化できない。§15.2 の注記と §3.1 の判断は正しい。
 
-**(2) ★ 切断時刻が取れる API がある**
+#### (2) ★ 切断時刻が取れる API がある
 
 ```objc
 - (void)centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:
@@ -2198,7 +2199,7 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 > ただし OS が実際にどちらを呼ぶかは別問題なので、
 > スパイクでは**旧版も残して「どちらが呼ばれたか」を記録する**ようにした。
 > watchOS 10+ が確実に要るのは、次の `EnableAutoReconnect`（`NS_AVAILABLE(14_0, 17_0)`）のほう。
-
+>
 > **★★ 重要な訂正(2026-09-03、実機計測で判明)**
 >
 > **実機（Watch SE 第1世代 / watchOS 10.6.2）では、この ts 版は一度も呼ばれなかった。**
@@ -2216,7 +2217,7 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 > 第 2 回のスパイクで検証する。それでも呼ばれなければ watchOS 10.6.2 の制約なので、
 > 遡及判定の基準時刻は**イベント受信時刻からの推定**に切り替える必要がある。
 
-**(3) システムによる自動再接続(watchOS 10+)── (2) と対の API**
+#### (3) システムによる自動再接続(watchOS 10+)── (2) と対の API
 
 ```objc
 CBConnectPeripheralOptionEnableAutoReconnect  NS_AVAILABLE(14_0, 17_0)
@@ -2231,7 +2232,7 @@ CBConnectPeripheralOptionEnableAutoReconnect  NS_AVAILABLE(14_0, 17_0)
 > 定数は watchOS 10.0 以降にしか無いので、9.0 ターゲットでは `#available` で包む。
 > → **P0-9(切断時刻)と P2-2(再接続を OS に寄せる)は、1 つの変更で同時に決まる。**
 
-**(4) ★ 第二の切断検知経路が watchOS で使える**
+#### (4) ★ 第二の切断検知経路が watchOS で使える
 
 ```objc
 - (void)registerForConnectionEventsWithOptions:
@@ -2268,6 +2269,8 @@ WWDC22 の説明を読む限り、**5 回の予算は「characteristic の値変
 ---
 
 ## 20. 参考資料
+
+<!-- markdownlint-disable MD013 -->
 
 - [Get timely alerts from Bluetooth devices on watchOS — WWDC22](https://developer.apple.com/videos/play/wwdc2022/10135/)
 - [Connect Bluetooth devices to Apple Watch — WWDC21](https://developer.apple.com/videos/play/wwdc2021/10005/)
@@ -2321,3 +2324,5 @@ WWDC22 の説明を読む限り、**5 回の予算は「characteristic の値変
 - [Wake up to the AlarmKit API — WWDC25 Session 230](https://developer.apple.com/videos/play/wwdc2025/230/) / [AlarmKit](https://developer.apple.com/documentation/alarmkit)
 - [Finish tasks in the background — WWDC25 Session 227](https://developer.apple.com/videos/play/wwdc2025/227/)(`BGContinuedProcessingTask`)
 - ローカル SDK: `WatchOS26.5.sdk` の `CoreBluetooth.framework/Headers`(`CBPeripheralManager.h` / `CBCentralManager.h` / `CBCentralManagerConstants.h`)および `WatchKit.framework/Headers/WKBackgroundTask.h`
+
+<!-- markdownlint-enable MD013 -->

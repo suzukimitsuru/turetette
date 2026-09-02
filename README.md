@@ -8,7 +8,7 @@ Apple Watch を装着したユーザーが、BLE接続したデバイス（例�
 
 ## フォルダ構成
 
-```
+```text
 turetette/
 ├── apple-watch/          # Apple Watch アプリ (watchOS / Swift)
 │   └── TuretetteWatch/
@@ -32,6 +32,7 @@ turetette/
 ## Apple Watch アプリ機能
 
 ### BLE距離監視
+
 - 周辺のBLEデバイスをスキャン・接続
 - 1秒ごとに電波強度(RSSI)を取得
 - RSSI → 距離変換: `distance = 10 ^ ((txPower - RSSI) / (10 × n))`
@@ -39,10 +40,12 @@ turetette/
 - 2m以上離れると `isOutOfRange = true`
 
 ### モーション検知トリガー
+
 - `CMMotionActivityManager` で静止→歩行/走行の状態変化を検知
 - 立ち上がり・歩き出しのタイミングでBLE距離チェックを実行
 
 ### アラーム
+
 - BLE距離超過 × モーション検知で発動
 - `WKInterfaceDevice.play()` によるハプティクス(2秒おきに繰り返し)
 - 手動で「停止」ボタンを押すまで継続
