@@ -71,7 +71,8 @@
   - Watch は切断で起きるが、それは**「再接続を試みるための短い枠」**であって
     通知を出すための枠とは限らない。ここが方式1 最大の未検証点(§19.7-1)。
   - SDK 確認により、**切断時刻が取れる `didDisconnectPeripheral:timestamp:`** の存在が判明。
-    遡及判定(§13.8 / §14.4)の基準時刻にはこれを使うこと。
+    ただし **実機では `EnableAutoReconnect` を付けないと呼ばれない**(2026-09-03 の実測、§19.5-2 の訂正)。
+    遡及判定(§13.8 / §14.4)の基準時刻に使うには、接続オプションとセットで入れること。
   - **`registerForConnectionEvents` は watchOS 6.0+ で使える**(§19.5-4)。
     背景 BLE 起床とは別系統なので、**Series 6 未満の現在の機体でも試せる可能性がある。**
 
@@ -283,8 +284,10 @@ BLE の切断検知そのものは、Link Layer の **supervision timeout(実測
 >   **`centralManager:didDisconnectPeripheral:timestamp:isReconnecting:error:`** を使う
 >   (可用性注釈が無く watchOS 9.0 ターゲットのままビルドできる。§19.5-2 の訂正を参照)。
 >   背景起床は切断から数秒遅れるため、**切断時刻が取れないと §13.8 / §14.4 の遡及判定の基準時刻がずれる。**
-> - 上図の「自前で `connect` を張り直す」猶予処理は、
->   **`CBConnectPeripheralOptionEnableAutoReconnect`(watchOS 10+)** で OS 側に寄せられる可能性がある。
+> - **★ ただし ts 版は実装するだけでは呼ばれない。** `connect` に
+>   **`CBConnectPeripheralOptionEnableAutoReconnect`(watchOS 10+)** を渡すこと。
+>   実機計測でこの 2 つが対の API だと判明した(§19.5-2 の訂正、2026-09-03)。
+> - 同じオプションで、上図の「自前で `connect` を張り直す」猶予処理を OS 側に寄せられる。
 >   ただし §17.5 のレンジ縮小挙動との相互作用は未確認。
 
 ### 3.3 誤検知の要因と対策
@@ -2196,7 +2199,24 @@ WWDC22 のセッションを読み直したところ、**切断と notify とで
 > スパイクでは**旧版も残して「どちらが呼ばれたか」を記録する**ようにした。
 > watchOS 10+ が確実に要るのは、次の `EnableAutoReconnect`（`NS_AVAILABLE(14_0, 17_0)`）のほう。
 
-**(3) システムによる自動再接続(watchOS 10+)**
+> **★★ 重要な訂正(2026-09-03、実機計測で判明)**
+>
+> **実機（Watch SE 第1世代 / watchOS 10.6.2）では、この ts 版は一度も呼ばれなかった。**
+> 旧版だけが呼ばれ、集計の「切断→起床の遅延」は空のままだった。
+> 両方のデリゲートを実装した状態での結果なので、実装漏れではない。
+>
+> 原因の仮説は **`connect` を `options: nil` で呼んでいたこと。**
+> **(2) と (3) は独立した機能ではなく、対の API** と考えるのが自然で、根拠は 3 つ。
+>
+> - SDK ヘッダの discussion が**全て `EnableAutoReconnect` 前提**で書かれている
+> - `isReconnecting` という引数は、auto-reconnect が無効なら意味を持たない
+> - 逆方向の依存（`EnableAutoReconnect` を使うには ts 版の実装が必須）は公式に確認できる
+>
+> → **「ts 版に切り替える」だけでは切断時刻は取れない。`connect` にオプションを渡すこと。**
+> 第 2 回のスパイクで検証する。それでも呼ばれなければ watchOS 10.6.2 の制約なので、
+> 遡及判定の基準時刻は**イベント受信時刻からの推定**に切り替える必要がある。
+
+**(3) システムによる自動再接続(watchOS 10+)── (2) と対の API**
 
 ```objc
 CBConnectPeripheralOptionEnableAutoReconnect  NS_AVAILABLE(14_0, 17_0)
@@ -2206,6 +2226,10 @@ CBConnectPeripheralOptionEnableAutoReconnect  NS_AVAILABLE(14_0, 17_0)
 `isReconnecting` フラグで再接続中かどうかも分かる。
 §3.2 の猶予フェーズで自前に `connect` を張り直している部分を、OS 側に寄せられる可能性がある。
 ただし §17.5 の「境界での再接続繰り返しでレンジが縮む」挙動との相互作用は未確認。
+
+> **上の訂正のとおり、これは (2) の前提条件でもある。**
+> 定数は watchOS 10.0 以降にしか無いので、9.0 ターゲットでは `#available` で包む。
+> → **P0-9(切断時刻)と P2-2(再接続を OS に寄せる)は、1 つの変更で同時に決まる。**
 
 **(4) ★ 第二の切断検知経路が watchOS で使える**
 

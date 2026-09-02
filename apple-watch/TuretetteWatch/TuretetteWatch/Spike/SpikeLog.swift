@@ -18,7 +18,7 @@ enum SpikeConfig {
     ///
     /// 現在の機体（Apple Watch SE 第1世代）で測れるのは **G0-3 と G0-5（フェーズ C）**。
     /// G0-1 / G0-2 / G0-4 は背景 BLE 起床が要るので Series 6 以降が必要（設計 §19）。
-    static let enabled = false
+    static let enabled = true
 
     /// ペリフェラル役（`spike/peripheral-sim`）が公開するサービス。
     static let serviceUUIDString = "E7A1B2C0-1D3E-4F5A-8B6C-9D0E1F2A3B4C"
@@ -167,6 +167,9 @@ final class SpikeLog {
         let alertFail = recent.filter { $0.kind == .alertFail }
         let alertDelivered = recent.filter { $0.kind == .alertDelivered }
 
+        // どちらの切断デリゲートが呼ばれたか（§19.5-2 の検証。第 1 回は旧版のみだった）
+        let allDisconnects = recent.filter { $0.kind == .disconnect }
+
         // G0-5: registerForConnectionEvents は背景で発火するか
         let connEvents = recent.filter { $0.kind == .connEvent }
 
@@ -190,6 +193,8 @@ final class SpikeLog {
             connEventBackgroundCount: connEvents.filter { $0.appState != "active" }.count,
             connEventForegroundCount: connEvents.filter { $0.appState == "active" }.count,
             connEventDisconnectedCount: connEvents.filter { $0.detail.contains("切断") }.count,
+            disconnectTsCount: allDisconnects.filter { $0.detail.hasPrefix("ts版") }.count,
+            disconnectLegacyCount: allDisconnects.filter { $0.detail.hasPrefix("旧版") }.count,
             // 「切断が起きた時刻」と「アプリが起きた時刻」の差（§19.5-2 の timestamp から算出）
             disconnectWakeDelaysMs: bgDisconnects.compactMap { Self.parseMs($0.detail) }
         )
@@ -222,6 +227,7 @@ final class SpikeLog {
         out.append("[G0-4] 切断起床の枠でローカル通知を積めるか")
         out.append("  試行: \(s.alertTried) / 登録成功: \(s.alertOK) / 失敗: \(s.alertFailed)")
         out.append("  実際に配信されていた: \(s.alertDelivered) 件")
+        out.append("  呼ばれた切断デリゲート: ts版 \(s.disconnectTsCount) 件 / 旧版 \(s.disconnectLegacyCount) 件")
         if !s.disconnectWakeDelaysMs.isEmpty {
             let sorted = s.disconnectWakeDelaysMs.sorted()
             out.append("  切断→起床の遅延 中央値: \(sorted[sorted.count / 2]) ms / 最大: \(sorted.last ?? 0) ms")
@@ -294,5 +300,7 @@ struct SpikeSummary {
     let connEventBackgroundCount: Int
     let connEventForegroundCount: Int
     let connEventDisconnectedCount: Int
+    let disconnectTsCount: Int
+    let disconnectLegacyCount: Int
     let disconnectWakeDelaysMs: [Int]
 }

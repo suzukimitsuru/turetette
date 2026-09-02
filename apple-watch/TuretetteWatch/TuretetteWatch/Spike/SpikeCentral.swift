@@ -51,7 +51,9 @@ final class SpikeCentral: NSObject, ObservableObject {
     /// 計測を開始する。状態復元を有効にするため、起動のたびに同じ識別子で作り直す。
     func start() {
         guard central == nil else { return }
-        SpikeLog.shared.add(.note, "SpikeCentral を開始")
+        // 計測条件をログの先頭に残す。第 1 回（オプション無し）と第 2 回を混ぜて読まないため。
+        let auto = connectOptions == nil ? "無効(watchOS 10 未満)" : "有効"
+        SpikeLog.shared.add(.note, "SpikeCentral を開始 / AutoReconnect=\(auto)")
         central = CBCentralManager(
             delegate: self,
             queue: nil,
@@ -126,7 +128,7 @@ final class SpikeCentral: NSObject, ObservableObject {
             peripheral = known
             known.delegate = self
             SpikeLog.shared.add(.note, "既知ペリフェラルへ再接続を試行")
-            central.connect(known, options: nil)
+            requestConnect(central, known)
             return
         }
 
@@ -180,7 +182,7 @@ extension SpikeCentral: CBCentralManagerDelegate {
         peripheral.delegate = self
         UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: lastPeripheralKey)
         SpikeLog.shared.add(.note, "発見 RSSI \(RSSI) → 接続要求")
-        central.connect(peripheral, options: nil)
+        requestConnect(central, peripheral)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -196,6 +198,28 @@ extension SpikeCentral: CBCentralManagerDelegate {
         scanOrReconnect()
     }
 
+    // MARK: 接続
+
+    /// 接続オプション。
+    ///
+    /// **`ts 版` の切断デリゲート（§19.5-2）は、この `EnableAutoReconnect` と
+    /// セットで初めて呼ばれる**、というのが第 2 回の仮説。あわせて
+    /// 「猶予フェーズの再接続を OS 側に寄せられるか」（P2-2 / §19.5-3）にも答えが出る。
+    ///
+    /// 定数は watchOS 10.0 以降にしか無い。デプロイメントターゲットは 9.0 なので
+    /// `#available` で包む。9.x の機体では `nil` になり、第 1 回と同じ挙動に戻る。
+    private var connectOptions: [String: Any]? {
+        if #available(watchOS 10.0, *) {
+            return [CBConnectPeripheralOptionEnableAutoReconnect: true]
+        }
+        return nil
+    }
+
+    /// 3 箇所ある接続要求の共通入口。オプションの付け忘れを防ぐ。
+    private func requestConnect(_ central: CBCentralManager, _ peripheral: CBPeripheral) {
+        central.connect(peripheral, options: connectOptions)
+    }
+
     /// 切断（timestamp 版）。**`timestamp` で「いつ切れたか」が取れる**のがこちらの価値（§19.5-2）。
     ///
     /// 背景起床は切断から数秒遅れるため、旧 API では切断時刻が分からない。
@@ -205,6 +229,13 @@ extension SpikeCentral: CBCentralManagerDelegate {
     ///   デプロイメントターゲットのままコンパイルできる**（`@available` を付けると
     ///   「プロトコルが watchOS 9.0 での可用性を要求する」とコンパイルエラーになる）。
     ///   実際に呼ばれるかは OS 側の実装次第なので、旧版も残して**どちらが呼ばれたかを記録する**。
+    ///
+    /// - Important: **第 1 回の計測（2026-09-02）では、このメソッドは一度も呼ばれなかった。**
+    ///   `options: nil` で接続していたため。ヘッダの説明文が全て
+    ///   `CBConnectPeripheralOptionEnableAutoReconnect` 前提で書かれており、
+    ///   `isReconnecting` という引数も auto-reconnect が有効でなければ意味を持たない。
+    ///   → **この 2 つは対の API で、片方だけでは動かない**という仮説を立て、
+    ///   `connectOptions` でオプションを渡すようにした。第 2 回でこれを検証する。
     func centralManager(_ central: CBCentralManager,
                         didDisconnectPeripheral peripheral: CBPeripheral,
                         timestamp: CFAbsoluteTime,
@@ -251,7 +282,7 @@ extension SpikeCentral: CBCentralManagerDelegate {
         // CoreBluetooth はタイムアウト無しで待つので、そのまま再接続を要求しておく。
         // ts 版が `isReconnecting = true` を返したときは OS が張り直すので二重に要求しない。
         if shouldReconnect {
-            central.connect(peripheral, options: nil)
+            requestConnect(central, peripheral)
         }
     }
 

@@ -99,7 +99,7 @@ G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留。
 | P0-6 | 1 秒 `Timer` ポーリングを廃し、イベント駆動 + 適応間隔へ | `BLEManager` | §9-4 |
 | P0-7 | アラーム状態の永続化(背景終了に耐える) | `AlarmManager` | §9-7 |
 | P0-8 | 発火ロジックを View から剥がす下準備(通知経路の整理) | `ContentView` / `AppNotifications` | §9-8 |
-| **P0-9** | **切断デリゲートを `didDisconnectPeripheral:timestamp:isReconnecting:error:` に切り替える**。切断時刻を永続化する。旧版も残し、どちらが呼ばれたかを記録する | `BLEManager` | §19.5-2 ★ |
+| **P0-9** | **切断デリゲートを `didDisconnectPeripheral:timestamp:isReconnecting:error:` に切り替え、あわせて `connect` に `EnableAutoReconnect` を渡す**。**オプション無しでは ts 版が呼ばれない**(2026-09-03 実測)。切断時刻を永続化する。旧版も残し、どちらが呼ばれたかを記録する | `BLEManager` | §19.5-2 ★ |
 | **P0-10** | **`txPower` / `n` の実機較正。** 1m 刻みの RSSI を屋内・屋外で記録し、現在の `-59` / `2.0` を置き換える | `BLEManager` | §17.3 / §17.6 |
 
 **完了条件**
@@ -146,7 +146,7 @@ G0-1 / G0-2 / G0-4 は Series 6 以降の機体が入るまで保留。
 | ID | 内容 | 対象 | 出典 |
 |---|---|---|---|
 | P2-1 | **`ProximityCoordinator` 新規**: Idle / Guarding / Suspect / Confirming / Alarming | 新規 | §6 |
-| P2-2 | 猶予タイマーと再接続試行(誤検知の吸収)。**`CBConnectPeripheralOptionEnableAutoReconnect`(watchOS 10+)で OS 側に寄せられないか比較する**(§19.5-3) | `ProximityCoordinator` | §3.2、§3.3 |
+| P2-2 | 猶予タイマーと再接続試行(誤検知の吸収)。**`EnableAutoReconnect` で OS 側に寄せられないか比較する**(§19.5-3)。**P0-9 と同じ 1 つの変更で決まる** | `ProximityCoordinator` | §3.2、§3.3 |
 | P2-3 | 背景予算の監視(`LeGattNear/Exceeded...`)と、枯渇時の縮退 | `BLEManager` | §6 |
 | P2-4 | `AppDelegate.handle(_:)` の分岐整理 + `WKWatchConnectivityRefreshBackgroundTask` 追加 | `AppDelegate` | §8-10 |
 | P2-5 | `ContentView` を表示専用にする(発火経路を Coordinator に一本化) | `ContentView` | §9-8 |

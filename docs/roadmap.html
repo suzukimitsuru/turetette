@@ -646,7 +646,7 @@ body {
    s: "todo" 未着手 / "wip" 着手中 / "done" 完了 / "skip" 見送り
    ══════════════════════════════════════════════════════════════ */
 
-const UPDATED = "2026-09-02";
+const UPDATED = "2026-09-03";
 const CURRENT = "P1";              // 現在着手中（またはこれから着手する）フェーズ ID
 
 const PLAN = [
@@ -690,7 +690,7 @@ const PLAN = [
       { id: "P0-6", s: "todo", t: "1 秒 <code>Timer</code> ポーリングを廃し、イベント駆動 + 適応間隔へ", tgt: "BLEManager", ref: "§9-4" },
       { id: "P0-7", s: "todo", t: "アラーム状態の永続化（背景終了に耐える）", tgt: "AlarmManager", ref: "§9-7" },
       { id: "P0-8", s: "todo", t: "発火ロジックを View から剥がす下準備（通知経路の整理）", tgt: "ContentView", ref: "§9-8" },
-      { id: "P0-9", s: "todo", t: "<b>切断デリゲートを <code>didDisconnectPeripheral:timestamp:</code> に切り替える</b>。切断時刻が無いと遡及判定の基準がずれる", tgt: "BLEManager", ref: "§19.5-2" },
+      { id: "P0-9", s: "todo", t: "<b>切断デリゲートを <code>didDisconnectPeripheral:timestamp:</code> に切り替え、<code>connect</code> に <code>EnableAutoReconnect</code> を渡す</b> — <b>オプション無しでは ts 版が呼ばれない</b>（2026-09-03 実測）", tgt: "BLEManager", ref: "§19.5-2" },
       { id: "P0-10", s: "todo", t: "<b><code>txPower</code> / <code>n</code> の実機較正</b> — 現在の <code>-59</code> / <code>2.0</code> は自由空間の値。較正前の 2m しきい値は根拠を持たない", tgt: "BLEManager", ref: "§17.3" }
     ],
     dod: [
@@ -725,7 +725,7 @@ const PLAN = [
     goal: "判定を 1 か所に集め、誤検知の抑制と背景予算の管理を入れる。",
     tasks: [
       { id: "P2-1", s: "todo", t: "<b><code>ProximityCoordinator</code> 新規</b> — Idle / Guarding / Suspect / Confirming / Alarming", tgt: "新規", ref: "§6" },
-      { id: "P2-2", s: "todo", t: "猶予タイマーと再接続試行（遮蔽による誤検知の吸収）。<code>EnableAutoReconnect</code>（watchOS 10+）で OS 側に寄せられないか比較", tgt: "ProximityCoordinator", ref: "§3.2 / §19.5-3" },
+      { id: "P2-2", s: "todo", t: "猶予タイマーと再接続試行（遮蔽による誤検知の吸収）。<code>EnableAutoReconnect</code> で OS 側に寄せられないか比較 — <b>P0-9 と同じ 1 つの変更で決まる</b>", tgt: "ProximityCoordinator", ref: "§3.2 / §19.5-3" },
       { id: "P2-3", s: "todo", t: "背景予算の監視（<code>LeGattNear/Exceeded…</code>）と枯渇時の縮退", tgt: "BLEManager", ref: "§6" },
       { id: "P2-4", s: "todo", t: "<code>handle(_:)</code> の分岐整理 + WatchConnectivity タスク分岐を追加", tgt: "AppDelegate", ref: "§8-10" },
       { id: "P2-5", s: "todo", t: "<code>ContentView</code> を表示専用にする", tgt: "ContentView", ref: "§9-8" },
