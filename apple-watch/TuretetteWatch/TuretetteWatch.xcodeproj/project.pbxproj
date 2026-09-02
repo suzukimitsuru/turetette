@@ -22,6 +22,7 @@
 		AA00000E000000000000001 /* SpikeMotionProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000E000000000000000 /* SpikeMotionProbe.swift */; };
 		AA00000F000000000000001 /* SpikeRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000F000000000000000 /* SpikeRunner.swift */; };
 		AA000010000000000000001 /* SpikeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000010000000000000000 /* SpikeView.swift */; };
+		AA000011000000000000001 /* SpikeAlertProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000011000000000000000 /* SpikeAlertProbe.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		AA000007000000000000000 /* AlarmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmView.swift; sourceTree = "<group>"; };
 		AA000008000000000000000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA000009000000000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA00000900000000000000E /* TuretetteWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TuretetteWatch.entitlements; sourceTree = "<group>"; };
 		AA00000A000000000000000 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AA00000B000000000000000 /* AppNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotifications.swift; sourceTree = "<group>"; };
 		AA00000C000000000000000 /* SpikeLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeLog.swift; sourceTree = "<group>"; };
@@ -42,6 +44,7 @@
 		AA00000E000000000000000 /* SpikeMotionProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeMotionProbe.swift; sourceTree = "<group>"; };
 		AA00000F000000000000000 /* SpikeRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeRunner.swift; sourceTree = "<group>"; };
 		AA000010000000000000000 /* SpikeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeView.swift; sourceTree = "<group>"; };
+		AA000011000000000000000 /* SpikeAlertProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpikeAlertProbe.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +78,7 @@
 				CC000004000000000000000 /* Spike */,
 				AA000008000000000000000 /* Assets.xcassets */,
 				AA000009000000000000000 /* Info.plist */,
+				AA00000900000000000000E /* TuretetteWatch.entitlements */,
 			);
 			path = TuretetteWatch;
 			sourceTree = "<group>";
@@ -106,6 +110,7 @@
 				AA00000E000000000000000 /* SpikeMotionProbe.swift */,
 				AA00000F000000000000000 /* SpikeRunner.swift */,
 				AA000010000000000000000 /* SpikeView.swift */,
+				AA000011000000000000000 /* SpikeAlertProbe.swift */,
 			);
 			path = Spike;
 			sourceTree = "<group>";
@@ -201,6 +206,7 @@
 				AA00000E000000000000001 /* SpikeMotionProbe.swift in Sources */,
 				AA00000F000000000000001 /* SpikeRunner.swift in Sources */,
 				AA000010000000000000001 /* SpikeView.swift in Sources */,
+				AA000011000000000000001 /* SpikeAlertProbe.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,5 +1,6 @@
 import Foundation
 import WatchKit
+import os
 
 /// G0 実機スパイク — 使い捨ての計測用ログ。
 ///
@@ -13,9 +14,12 @@ enum SpikeConfig {
     /// true にすると、アプリ起動時に本体ではなく計測画面が出る。
     ///
     /// **P1 の開発中は false**（本体アプリを動かすため）。
-    /// G0-3 を計測するときだけ true に戻してビルドし直す。
+    /// 計測するときだけ true に戻してビルドし直す。
     /// G0 が終わったら `Spike/` ごと削除する。
-    static let enabled = false
+    ///
+    /// 現在の機体（Apple Watch SE 第1世代）で測れるのは **G0-3 と G0-5（フェーズ C）**。
+    /// G0-1 / G0-2 / G0-4 は背景 BLE 起床が要るので Series 6 以降が必要（設計 §19）。
+    static let enabled = true
 
     /// ペリフェラル役（`spike/peripheral-sim`）が公開するサービス。
     static let serviceUUIDString = "E7A1B2C0-1D3E-4F5A-8B6C-9D0E1F2A3B4C"
@@ -33,7 +37,22 @@ enum SpikeConfig {
     static let lookbackWindow: TimeInterval = 180
 
     /// 保持するイベント数の上限。
-    static let maxEvents = 1500
+    ///
+    /// 1 回の切断で複数のイベントが出るため、1500 では 2 時間ももたなかった
+    /// （2026-09-03 の第 1 回で 01:00 より前が失われた）。第 2 回に向けて広げる。
+    static let maxEvents = 8000
+
+    /// `os_log` のサブシステム。
+    ///
+    /// **Watch 単体ではログを取り出せない**ため、`UserDefaults` と併せて
+    /// `os_log` にも流す。Mac 側からはこう読む。
+    ///
+    /// ```text
+    /// log stream --predicate 'subsystem == "com.turetette.watch.spike"'
+    /// ```
+    ///
+    /// Console.app でペアリング済みの Watch を選んでも同じものが見える。
+    static let logSubsystem = "com.turetette.watch.spike"
 }
 
 // MARK: - イベント
@@ -60,6 +79,11 @@ struct SpikeEvent: Codable, Identifiable {
         case probeStart      // 遡り問い合わせ開始（G0-3）
         case probeEnd        // 同 完了
         case probeLost       // 同 実行枠内に返らなかった
+        case connEvent       // registerForConnectionEvents の接続/切断（G0-5）
+        case alertTry        // 切断起床の枠でローカル通知の登録を試みた（G0-4）
+        case alertOK         // 同 登録に成功
+        case alertFail       // 同 登録に失敗
+        case alertDelivered  // 同 実際に配信されていたことを確認
         case note
     }
 }
@@ -79,10 +103,40 @@ final class SpikeLog {
     // MARK: 書き込み
 
     /// イベントを 1 件記録する。バックグラウンドから呼ばれるので即時に永続化する。
+    /// `os_log` の出口。Watch の中の `UserDefaults` を Mac から読む手段が無いため併用する。
+    static let osLog = Logger(subsystem: SpikeConfig.logSubsystem, category: "g0")
+
+    /// 集計の全文を `os_log` へ吐く。Watch の画面を書き写さずに Mac 側で受け取るため。
+    ///
+    /// 1 行ずつ出すのは、`log stream` の 1 メッセージあたりの長さ制限を避けるため。
+    func dumpSummaryToOSLog() {
+        Self.osLog.notice("---- 集計ここから ----")
+        for line in summaryText().split(separator: "\n", omittingEmptySubsequences: false) {
+            Self.osLog.notice("\(String(line), privacy: .public)")
+        }
+        Self.osLog.notice("---- 集計ここまで ----")
+    }
+
+    /// 保存済みイベントを古い順に `os_log` へ吐く。時刻の分布を Mac 側で見るため。
+    func dumpEventsToOSLog() {
+        let all = queue.sync { loadRaw() }
+        Self.osLog.notice("---- イベント \(all.count) 件ここから ----")
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm:ss"
+        for e in all {
+            Self.osLog.notice(
+                "\(f.string(from: e.at), privacy: .public) \(e.kind.rawValue, privacy: .public) [\(e.appState, privacy: .public)] \(e.detail, privacy: .public)")
+        }
+        Self.osLog.notice("---- イベントここまで ----")
+    }
+
     func add(_ kind: SpikeEvent.Kind, _ detail: String = "") {
         // アプリ状態はメインスレッドからしか読めないため、呼び出し元の文脈で先に確定させる
         let state = Self.currentAppState()
         let event = SpikeEvent(id: UUID(), at: Date(), kind: kind, detail: detail, appState: state)
+
+        // Mac から取り出せる経路。UserDefaults は Watch の中にしか無いため併用する。
+        Self.osLog.notice("\(kind.rawValue, privacy: .public) [\(state, privacy: .public)] \(detail, privacy: .public)")
 
         queue.sync {
             var all = loadRaw()
@@ -94,7 +148,11 @@ final class SpikeLog {
         }
     }
 
-    /// 計測フェーズ（A: notify のみ / B: 切断のみ）を切り替える。
+    /// 計測フェーズを切り替える。
+    ///
+    /// - A: notify だけで予算を使い切る（G0-1 / G0-2 前半）
+    /// - B: 切断だけで予算を使い切る（G0-2 本題 / G0-4）
+    /// - C: notify を購読せず `registerForConnectionEvents` だけで切断を拾う（G0-5）
     var phase: String {
         get { UserDefaults.standard.string(forKey: phaseKey) ?? "A" }
         set {
@@ -149,6 +207,18 @@ final class SpikeLog {
         let probeEnds = recent.filter { $0.kind == .probeEnd }
         let probeLost = recent.filter { $0.kind == .probeLost }
 
+        // G0-4: 切断起床の枠でローカル通知を積めたか
+        let alertTry = recent.filter { $0.kind == .alertTry }
+        let alertOK = recent.filter { $0.kind == .alertOK }
+        let alertFail = recent.filter { $0.kind == .alertFail }
+        let alertDelivered = recent.filter { $0.kind == .alertDelivered }
+
+        // どちらの切断デリゲートが呼ばれたか（§19.5-2 の検証。第 1 回は旧版のみだった）
+        let allDisconnects = recent.filter { $0.kind == .disconnect }
+
+        // G0-5: registerForConnectionEvents は背景で発火するか
+        let connEvents = recent.filter { $0.kind == .connEvent }
+
         return SpikeSummary(
             phase: phase,
             backgroundNotifyCount: bgNotify.count,
@@ -161,7 +231,18 @@ final class SpikeLog {
             probeStarted: probeStarts.count,
             probeReturned: probeEnds.count,
             probeLost: probeLost.count,
-            probeDurationsMs: probeEnds.compactMap { Self.parseMs($0.detail) }
+            probeDurationsMs: probeEnds.compactMap { Self.parseMs($0.detail) },
+            alertTried: alertTry.count,
+            alertOK: alertOK.count,
+            alertFailed: alertFail.count,
+            alertDelivered: alertDelivered.count,
+            connEventBackgroundCount: connEvents.filter { $0.appState != "active" }.count,
+            connEventForegroundCount: connEvents.filter { $0.appState == "active" }.count,
+            connEventDisconnectedCount: connEvents.filter { $0.detail.contains("切断") }.count,
+            disconnectTsCount: allDisconnects.filter { $0.detail.hasPrefix("ts版") }.count,
+            disconnectLegacyCount: allDisconnects.filter { $0.detail.hasPrefix("旧版") }.count,
+            // 「切断が起きた時刻」と「アプリが起きた時刻」の差（§19.5-2 の timestamp から算出）
+            disconnectWakeDelaysMs: bgDisconnects.compactMap { Self.parseMs($0.detail) }
         )
     }
 
@@ -187,6 +268,22 @@ final class SpikeLog {
             let max = sorted.last ?? 0
             let med = sorted[sorted.count / 2]
             out.append("  所要 中央値: \(med) ms / 最大: \(max) ms")
+        }
+        out.append("")
+        out.append("[G0-4] 切断起床の枠でローカル通知を積めるか")
+        out.append("  試行: \(s.alertTried) / 登録成功: \(s.alertOK) / 失敗: \(s.alertFailed)")
+        out.append("  実際に配信されていた: \(s.alertDelivered) 件")
+        out.append("  呼ばれた切断デリゲート: ts版 \(s.disconnectTsCount) 件 / 旧版 \(s.disconnectLegacyCount) 件")
+        if !s.disconnectWakeDelaysMs.isEmpty {
+            let sorted = s.disconnectWakeDelaysMs.sorted()
+            out.append("  切断→起床の遅延 中央値: \(sorted[sorted.count / 2]) ms / 最大: \(sorted.last ?? 0) ms")
+        }
+        out.append("")
+        out.append("[G0-5] registerForConnectionEvents は背景で発火するか")
+        out.append("  背景: \(s.connEventBackgroundCount) 件 / 前面: \(s.connEventForegroundCount) 件")
+        out.append("  うち切断: \(s.connEventDisconnectedCount) 件")
+        if s.connEventBackgroundCount > 0 {
+            out.append("  → 背景で発火する。Series 6 未満でも切断検知の道がある")
         }
         return out.joined(separator: "\n")
     }
@@ -242,4 +339,14 @@ struct SpikeSummary {
     let probeReturned: Int
     let probeLost: Int
     let probeDurationsMs: [Int]
+    let alertTried: Int
+    let alertOK: Int
+    let alertFailed: Int
+    let alertDelivered: Int
+    let connEventBackgroundCount: Int
+    let connEventForegroundCount: Int
+    let connEventDisconnectedCount: Int
+    let disconnectTsCount: Int
+    let disconnectLegacyCount: Int
+    let disconnectWakeDelaysMs: [Int]
 }

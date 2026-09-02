@@ -8,7 +8,7 @@ Apple Watch を装着したユーザーが、BLE接続したデバイス（例�
 
 ## フォルダ構成
 
-```
+```text
 turetette/
 ├── apple-watch/          # Apple Watch アプリ (watchOS / Swift)
 │   └── TuretetteWatch/
@@ -32,6 +32,7 @@ turetette/
 ## Apple Watch アプリ機能
 
 ### BLE距離監視
+
 - 周辺のBLEデバイスをスキャン・接続
 - 1秒ごとに電波強度(RSSI)を取得
 - RSSI → 距離変換: `distance = 10 ^ ((txPower - RSSI) / (10 × n))`
@@ -39,31 +40,43 @@ turetette/
 - 2m以上離れると `isOutOfRange = true`
 
 ### モーション検知トリガー
+
 - `CMMotionActivityManager` で静止→歩行/走行の状態変化を検知
 - 立ち上がり・歩き出しのタイミングでBLE距離チェックを実行
 
 ### アラーム
+
+止めるまで鳴り続けるアラームを 3 段構えで実装しています(設計 §7)。
+
 - BLE距離超過 × モーション検知で発動
-- `WKInterfaceDevice.play()` によるハプティクス(2秒おきに繰り返し)
-- 手動で「停止」ボタンを押すまで継続
+- **ローカル通知の連投**(5 秒間隔 × 48 発)で、画面が消えていても鳴らし続ける
+- **`WKExtendedRuntimeSession`** で、前面化した後は止めるまでハプティクスを継続
+- 通知の「停止」アクションから、アプリを開かずに止められる
 - 全画面アラーム表示(赤背景 + 停止ボタン)
+
+> **既知の制限**: 集中モード(就寝モードを含む)を貫通するには
+> Time Sensitive Notifications capability が必要ですが、
+> **無料の Personal Team では付与できません**(有料の Apple Developer Program が必要)。
+> 現状は**集中モード中にアラームが無音になります**。
+> 詳細は [docs/watch-alarm-design.md](docs/watch-alarm-design.md) §2.4 と
+> [docs/roadmap.html](docs/roadmap.html) の P1-4 を参照してください。
 
 ## 設計ドキュメント
 
-| ドキュメント | 内容 |
-|---|---|
-| [docs/watch-alarm-design.md](docs/watch-alarm-design.md) | iPhone スリープ中に Apple Watch へ通知し、ユーザが止めるまでアラームを鳴らす方式の検討（BLE 切断検知 / GPS 距離比較 / GPS 方式の欠点 §12 / 移動開始で検出モードへ移る仕様 §13 / 歩行距離による遡及検出 §14 / iPhone 側のジオフェンスによる盗難検知 §15 / AirTag が使えない理由 §16） |
-| [docs/implementation-plan.md](docs/implementation-plan.md) | 上記の検討から起こした実装計画（フェーズ G0〜P7、完了条件、検証ゲート） |
-| [docs/roadmap.html](docs/roadmap.html) | ロードマップと現在位置（ブラウザで開く。進捗はファイル冒頭の `PLAN` で管理） |
+| ドキュメント                                               | 内容                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [docs/watch-alarm-design.md](docs/watch-alarm-design.md)   | iPhone スリープ中に Apple Watch へ通知し、ユーザが止めるまでアラームを鳴らす方式の検討（BLE 切断検知 / GPS 距離比較 / GPS 方式の欠点 §12 / 移動開始で検出モードへ移る仕様 §13 / 歩行距離による遡及検出 §14 / iPhone 側のジオフェンスによる盗難検知 §15 / AirTag が使えない理由 §16 / BLE の実効レンジと切断条件 §17 / 背景実行能力の iOS・watchOS 対比 §18 / 背景での切断検知の可否と SDK 検証 §19） |
+| [docs/implementation-plan.md](docs/implementation-plan.md) | 上記の検討から起こした実装計画（フェーズ G0〜P7、完了条件、検証ゲート）                                                                                                                                                                                                                                                                                                                              |
+| [docs/roadmap.html](docs/roadmap.html)                     | ロードマップと現在位置（ブラウザで開く。進捗はファイル冒頭の `PLAN` で管理）                                                                                                                                                                                                                                                                                                                         |
 
 ## 開発環境
 
-| 項目 | 内容 |
-|------|------|
-| 言語 | Swift 5.0 |
-| プラットフォーム | watchOS 9.0+ |
-| フレームワーク | SwiftUI, CoreBluetooth, CoreMotion, WatchKit |
-| IDE | Xcode 14+ |
+| 項目             | 内容                                         |
+| ---------------- | -------------------------------------------- |
+| 言語             | Swift 5.0                                    |
+| プラットフォーム | watchOS 9.0+                                 |
+| フレームワーク   | SwiftUI, CoreBluetooth, CoreMotion, WatchKit |
+| IDE              | Xcode 14+                                    |
 
 ## セットアップ
 
