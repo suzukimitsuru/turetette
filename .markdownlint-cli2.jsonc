@@ -1,0 +1,11 @@
+// markdownlint の設定（CLAUDE.md の「Markdown の形式」に対応する）
+//
+// 検証コマンド: npx -y markdownlint-cli2 "**/*.md" "#node_modules"
+{
+  "config": {
+    // 既定の 80 桁は日本語の技術文書には短すぎるため 120 桁とする。
+    // 表は桁揃え（MD060）の結果として長くなるので対象外にする。
+    "MD013": { "line_length": 120, "tables": false }
+  },
+  "globs": ["**/*.md", "!node_modules"]
+}

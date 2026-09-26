@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 集中モードを貫通する通知（設計 §2.4 / P1-4）。                          -->
+	<!--                                                                        -->
+	<!-- これが無いと interruptionLevel = .timeSensitive は無視され、            -->
+	<!-- 就寝モードなどの集中モード中にアラームが無音になる。                   -->
+	<!--                                                                        -->
+	<!-- ★ 現在このファイルはビルドに組み込んでいない。                        -->
+	<!--   無料の Personal Team はこの capability に対応しておらず、            -->
+	<!--   組み込むとプロビジョニングの生成に失敗してビルドが通らないため。     -->
+	<!--     "Personal development teams ... do not support the                 -->
+	<!--      Time Sensitive Notifications capability."                          -->
+	<!--                                                                        -->
+	<!--   有料の Apple Developer Program に加入したら、ターゲットの            -->
+	<!--   Build Settings で CODE_SIGN_ENTITLEMENTS に次を設定して有効化する。  -->
+	<!--     TuretetteWatch/TuretetteWatch.entitlements                          -->
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+</dict>
+</plist>
