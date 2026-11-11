@@ -615,7 +615,7 @@ body {
   <section class="prereq">
     <h2>前提条件 — 満たせないと成立しない</h2>
     <ul>
-      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）。<b>手元の SE(第1世代)は要件を満たさず、G0-1 / G0-2 は測定できない</b>（G0-4 は第 1 回で SE でも測れた）</li>
+      <li><b>Apple Watch Series 6 以降 + watchOS 9 以降</b> — 背景 BLE 起床の動作要件（設計 §2.1）。<b>手元の SE(第1世代)は要件を満たさず、G0-1 / G0-2 は測定できない</b>（G0-4 は第 1 回で SE でも測れた）。SE(第2世代)は満たす見込み（推定。<a href="watch-alarm-design.md">docs/watch-alarm-design.md</a> §20.2）</li>
       <li><b>実機での検証</b> — 背景 BLE / WatchConnectivity / CoreMotion はシミュレータで再現しない（§10-1）</li>
       <li><b>文字盤にコンプリケーションを置いてもらう</b> — 無いと背景更新が 1 時間に 1 回まで落ちる（§14.10）</li>
       <li>iPhone 側は位置情報「常に許可」 — ジオフェンス盗難検知の前提（§15.3）</li>
@@ -647,7 +647,7 @@ body {
    s: "todo" 未着手 / "wip" 着手中 / "done" 完了 / "skip" 見送り
    ══════════════════════════════════════════════════════════════ */
 
-const UPDATED = "2026-10-16";
+const UPDATED = "2026-11-11";
 const CURRENT = "G0";            // 現在着手中（またはこれから着手する）フェーズ ID
 
 const PLAN = [
@@ -659,7 +659,8 @@ const PLAN = [
       { id: "D2", s: "done", t: "GPS 距離方式の欠点と検討事項（suppress-only 方針の確立）", ref: "§12" },
       { id: "D3", s: "done", t: "移動開始で検出モードへ移る仕様（L0/L1/L2 と遅延発報）", ref: "§13" },
       { id: "D4", s: "done", t: "歩行距離による遡及検出 / iPhone 側の起床手段 / AirTag 調査", ref: "§14–§16" },
-      { id: "D5", s: "done", t: "<b>BLE 実効レンジ / 背景実行能力の対比 / 切断検知の可否（SDK 実地確認）</b> — <b>ペリフェラル役の iPhone は切断を検知できない</b>、切断時刻が取れる API、<code>registerForConnectionEvents</code> は watchOS 6+、AlarmKit は iOS 専用", ref: "§17–§19" }
+      { id: "D5", s: "done", t: "<b>BLE 実効レンジ / 背景実行能力の対比 / 切断検知の可否（SDK 実地確認）</b> — <b>ペリフェラル役の iPhone は切断を検知できない</b>、切断時刻が取れる API、<code>registerForConnectionEvents</code> は watchOS 6+、AlarmKit は iOS 専用", ref: "§17–§19" },
+      { id: "D6", s: "done", t: "<b>タグ機器の選定</b> — 条件に「探すときに鳴らす・光らせる」を追加。本命は XIAO nRF52840 Sense + 圧電ブザー。MESH-100AC は鳴らせず通知過多の恐れ。<b>汎用紛失防止タグは Link Loss で切断時にタグ自身が鳴る</b>。離れたと分かる距離は見通し約 10m。SE(第2世代)は背景 BLE 起床の要件を満たす見込み", ref: "§20" }
     ]
   },
   {
@@ -831,7 +832,10 @@ const PLAN = [
     goal: "<b>置き忘れと盗難を、距離もしきい値も無しに区別する。</b>タグ静止 × 自分移動 = 置き忘れ、タグ移動 × 自分静止 = 盗難。AirTag は識別子が回転するため使えない。",
     tasks: [
       { id: "P7-1", s: "todo", t: "タグ側の wake-on-motion 仕様策定（<b>立ち上がりで 1 回だけ notify</b>。連投は予算を焼く）", ref: "§16.5" },
-      { id: "P7-2", s: "todo", t: "タグ × Watch の 2×2 判定を <code>ProximityCoordinator</code> に組み込む", ref: "§16.5" }
+      { id: "P7-2", s: "todo", t: "タグ × Watch の 2×2 判定を <code>ProximityCoordinator</code> に組み込む", ref: "§16.5" },
+      { id: "P7-3", s: "todo", t: "<b>汎用紛失防止タグで Immediate Alert（鳴らす）と Link Loss（切断でタグが鳴る）を確かめる</b> — 安価ですぐ試せる。購入後に nRF Connect でサービス一覧を確認", tgt: "要ハード", ref: "§20.6" },
+      { id: "P7-4", s: "todo", t: "XIAO nRF52840 Sense + 圧電ブザーでタグを試作（動き出しで 1 回だけ notify、探す時に鳴らして光らせる）", tgt: "要ハード", ref: "§20.5" },
+      { id: "P7-5", s: "todo", t: "（MESH-100AC を使う場合）前面で持ち歩き時の通知回数を数え、背景で使えるか判断する", tgt: "要ハード", ref: "§20.3" }
     ]
   }
 ];

@@ -75,6 +75,12 @@
     遡及判定(§13.8 / §14.4)の基準時刻に使うには、接続オプションとセットで入れること。
   - **`registerForConnectionEvents` は watchOS 6.0+ で使える**(§19.5-4)。
     背景 BLE 起床とは別系統なので、**Series 6 未満の現在の機体でも試せる可能性がある。**
+- **16. タグは「動き」に加えて「探すときに鳴らせる・光らせる」で選ぶ**(§20)。
+  - 本命は **XIAO nRF52840 Sense + 圧電ブザーの自作タグ**。§16.5 の仕様をそのまま作れる。
+  - MESH-100AC は動きを取れるが鳴らせず、通知が多すぎて背景起床の予算を焼く恐れがある。
+  - **汎用の紛失防止タグは Link Loss(`0x1803`)で切断時にタグ自身が鳴る。** 背景起床の予算を使わない。
+  - 離れたと分かる距離は**見通しで約 10m、屋内ではそれより短い**。
+  - Apple Watch SE(第2世代)は背景 BLE 起床の要件を満たす見込み(推定)。U1 は無い。
 
 ---
 
@@ -2283,7 +2289,168 @@ WWDC22 の説明を読む限り、**5 回の予算は「characteristic の値変
 
 ---
 
-## 20. 参考資料
+## 20. タグ機器の選定 ── MESH-100AC と汎用 BLE タグ(調査日 2026-11-11)
+
+§16.4 案 A の「モーション付きの汎用 BLE タグ」を、市販品から選ぶ。
+選定条件には、§16.5 の要件に加えて**「探すときにタグを鳴らせる・光らせる」**を入れる。
+あわせて、手元の SE(第1世代)の後継候補として **Apple Watch SE(第2世代)** で何が変わるかを確かめた。
+
+### 20.1 結論
+
+- **1. SE(第2世代)は背景 BLE 起床の要件(§2.1)を満たす見込み。**
+  - S8 チップ・Bluetooth 5.3 の 2022 年機で、Apple の要件「Series 6 以降」より新しい。
+    ただし Apple は SE(第2世代)を名指ししておらず、**これは推定**。最初に G0-1 で確かめる。
+  - **U1(UWB)は載っていない**ため、Nearby Interaction による精密な距離は使えない。
+- **2. MESH-100AC は「動き」は取れるが、鳴らせず、通知が多すぎる恐れがある。** 試験用に留める(§20.3)。
+- **3. 離れたと分かる距離は「見通しで約 10m、屋内ではそれより短い」。** 数 m 単位の判定はできない(§20.4)。
+- **4. 本命は XIAO nRF52840 Sense + 圧電ブザーの自作タグ。** §16.5 の仕様をそのまま作れ、最も安い(§20.5)。
+  完成品で手間を省くなら Nordic Thingy:52。
+- **5. 汎用の紛失防止タグ(iTag 類)は動きを取れないが、Bluetooth 標準のサービスで鳴らせる**(§20.6)。
+  - **Link Loss(`0x1803`)を使えば、切断時にタグ自身が鳴る。** 背景起床の予算(§2.1)を使わずに、
+    置き忘れた側でも鳴らせる。turetette にとって新しい手。
+- **6. 日本で使うには技適が要る。** 候補のどれも取得状況を確認できていない(§20.7)。
+
+### 20.2 Apple Watch SE(第2世代)で変わること
+
+| 項目                          | SE(第1世代)(手元の機体)          | SE(第2世代)                   |
+| ----------------------------- | -------------------------------- | ----------------------------- |
+| チップ                        | S5                               | S8                            |
+| Bluetooth                     | 5.0                              | 5.3                           |
+| 背景 BLE 起床(§2.1)           | **不可**(G0-1 / G0-2 を測れない) | **可の見込み**(推定。要 G0-1) |
+| `registerForConnectionEvents` | 背景で発火を確認(G0-5)           | 同じく使える見込み            |
+| 同時接続                      | 2 台まで(watchOS の制約)         | 同じ                          |
+| UWB(Nearby Interaction)       | 不可                             | **不可**(U1 非搭載)           |
+
+> **設計上の含意**: SE(第2世代)なら iPhone(案 A)と タグ を同時につなげる。
+> 精密な距離が要るなら UWB 搭載の Series 9 以降が候補になるが、本設計は距離ではなく切断と動きで判定するので必須ではない。
+
+### 20.3 MESH-100AC(ソニー MESH 動きブロック)
+
+ソニーマーケティングが 2022-08-31 に通信仕様を公開しており、MESH アプリ(watchOS 非対応)を使わずに
+CoreBluetooth から直接扱える。
+
+| 項目           | 内容                                                                                                      |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| 無線           | Bluetooth 4.0(BLE)、出力 Power Class 2                                                                    |
+| サービス UUID  | `72c90001-57a9-4d40-b746-534e22ec9f9e`                                                                    |
+| characteristic | `72c90002` Write Without Response / `72c90003` Notify / `72c90004` Write / `72c90005` Indicate            |
+| 接続手順       | Notify・Indicate を有効化 → Write にブロック機能の有効化コマンドを書く(ブロックのソフトウェア 1.2.5 以上) |
+| イベント       | `0x00` タップ / `0x01` シェイク / `0x02` フリップ / `0x03` 向きの変化。3 軸加速度が付く                   |
+| 光らせる       | 全ブロック共通コマンドでステータスバーの RGB を各色オン/オフ。数秒で自動消灯する                          |
+| 鳴らす         | **不可**(ブザーが無い)                                                                                    |
+| 通信距離       | 見通しで約 10m(公式)                                                                                      |
+| 自動電源オフ   | 何ともつながらない状態が 12 時間続くと切れる                                                              |
+| 電池           | 1 回の充電で最大約 30 日。充電は約 60 分。電池は交換できない                                              |
+| 価格           | 6,380 円(税込)                                                                                            |
+
+#### turetette での使い道
+
+| 場面                     | できること                                                                 |
+| ------------------------ | -------------------------------------------------------------------------- |
+| アプリが前面にある時     | 電波強度での大まかな距離表示、動きの即時受信、振動で鳴らし続ける           |
+| 背景: タグの動きで起きる | 本人が動いていないのにタグが動いた → 持ち去り(§16.5 の 2×2 表)             |
+| 背景: 切断で起きる       | 置き忘れ(起床後のローカル通知は G0-4 で確認中)                             |
+| 背景: 接続イベント       | `registerForConnectionEvents`(G0-5)                                        |
+| G0 スパイクの相手役      | Mac の PeripheralSim の代わりに、実物のタグとして G0-4 / G0-5 を測り直せる |
+
+#### §16.5 と合わない点
+
+- **動くたびに通知が来る。** §16.5 は「立ち上がりで 1 回だけ notify」を求めるが、MESH はイベントごとに送る。
+  鞄の中で揺れるだけで連続して通知が来て、**背景起床の予算(5 回/24h)をすぐ使い切る恐れがある。**
+- 通知の種類を絞れるか、同時に何台とつながるか、ハートビートに当たる定期通知があるかは**未確認**。
+- 対策案(未検証): 背景に回る時は通知の購読を止めて切断検知だけに使い、動きの判定は前面・拡張ランタイム中に限る。
+
+### 20.4 離れたと分かる距離
+
+| 項目                 | 目安                                                                     |
+| -------------------- | ------------------------------------------------------------------------ |
+| 公式の通信距離       | 見通しで約 10m(MESH-100AC)                                               |
+| 屋内・鞄の中・体越し | 10m より短くなる(§17.1 の傾向から、5m 前後もあり得ると推定)              |
+| 気づくまでの遅れ     | 圏外になってから supervision timeout で切断と判定されるまでの数秒(§17.2) |
+| 電波強度での判定     | 前面時のみ。誤差 2〜3 倍のため「近い / 中くらい / 遠い」の 3 段階が限度  |
+
+**「10m 前後離れたら気づく。ただし環境しだいで大きく前後する」**が答え。
+現行の 2m しきい値は較正しないと根拠を持たない(§17.6)という結論は変わらない。
+
+### 20.5 候補機器の比較
+
+◎ は向いている、○ は使える、△ は工夫が要る、✕ はできない。
+
+| 機器                        | 動き通知        | 鳴らす                             | 光らせる                         | 価格(税込)              | 所見                                          |
+| --------------------------- | --------------- | ---------------------------------- | -------------------------------- | ----------------------- | --------------------------------------------- |
+| XIAO nRF52840 Sense         | ◎ 自作          | △ 圧電ブザーを後付け(数百円)       | ○ 基板上のフルカラー LED         | 2,961 円 + 電池・ケース | §16.5 をそのまま作れる。**本命**              |
+| Nordic Thingy:52            | ◎               | ◎ スピーカー内蔵                   | ◎ フルカラー LED                 | 7,769 円(DigiKey)       | ケース・電池込み。SparkFun では販売終了の表示 |
+| Nordic Thingy:53            | ◎               | ○ ブザー内蔵(要確認)               | ◎ フルカラー LED                 | 10,822 円(DigiKey)      | 高価。52 で足りる                             |
+| M5StickC Plus2              | ◎ 自作          | ◎ ブザー内蔵                       | ◎ 赤色 LED + 画面                | 未確認                  | 電池 200mAh で持ちが短い                      |
+| micro:bit v2                | ◎               | ○ スピーカー内蔵(自作プログラムで) | ◎ 5×5 LED を BLE から直接制御    | 未確認                  | 大きく、電池が持たない                        |
+| 汎用の紛失防止タグ(iTag 類) | ✕               | ◎ 標準サービスで鳴らせる           | 機種による                       | 数百〜千円台            | Link Loss でタグ自身が鳴る(§20.6)             |
+| MESH-100AC                  | ◎(多すぎる懸念) | ✕                                  | △ ステータスバー。数秒で自動消灯 | 6,380 円                | 「探す」には弱い(§20.3)                       |
+| AirTag・Tile・MAMORIO       | ─               | 純正アプリでのみ                   | ─                                | ─                       | 仕様非公開のため使えない(AirTag は §16)       |
+| 業務用ビーコン(MOKO 等)     | ○               | 一部の機種のみ                     | ○                                | 法人向け                | 接続しない方式で、Watch の背景処理に向かない  |
+
+### 20.6 汎用の紛失防止タグ(iTag 類)
+
+安価なキーファインダーの多くは、Bluetooth SIG の標準サービス(Find Me / Proximity プロファイル)を持つ。
+
+| サービス / characteristic     | UUID                | 使い方                                                        |
+| ----------------------------- | ------------------- | ------------------------------------------------------------- |
+| Immediate Alert / Alert Level | `0x1802` / `0x2A06` | `0x01` か `0x02` を書くと鳴る、`0x00` で止まる(段階は個体差)  |
+| Link Loss / Alert Level       | `0x1803` / `0x2A06` | 書いておいた段階で、**切断時にタグ自身が鳴る**                |
+| Tx Power                      | `0x1804`            | 送信電力。距離推定の較正に使える(持たない機種もある)          |
+| ボタン(ベンダ独自)            | `0xFFE0` / `0xFFE1` | タグのボタン押下が notify で届く。**タグから Watch を鳴らす** |
+| Battery                       | `0x180F`            | 機種により有無が分かれる                                      |
+
+#### iTag 類の使い道
+
+- **探す:** Watch から Immediate Alert に書いてタグを鳴らす。
+- **置き忘れ:** Link Loss を設定しておけば、Watch が背景で起きられなくてもタグ側で鳴る。
+  Watch の背景起床の予算(§2.1)にも、G0-4 の未検証点にも左右されない。
+- **逆探し:** タグのボタンで Watch を鳴らす(Watch を外して置き忘れた時の救済)。
+
+#### 具体的な製品
+
+| 製品                                          | 入手先                                        | 価格           | 標準サービス                  | 技適         | 所見                             |
+| --------------------------------------------- | --------------------------------------------- | -------------- | ----------------------------- | ------------ | -------------------------------- |
+| iTag(ノーブランド。iSearching アプリ系)       | 楽天・ラクマ等の通販。ドン・キホーテ(2024 年) | 330 円〜千円台 | ○ 解析例が多い                | 未確認       | 実験用に最有力。個体差が大きい   |
+| Ace Sensor Pally KF-LI(ソーラー充電)          | 海外通販                                      | 未確認         | ○ Find Me と Link Loss を明記 | 未確認       | Nordic 製チップ。情報が古い      |
+| Find My / Find Hub 対応タグ(ELECOM・LiTag 等) | 量販店・Amazon                                | 1,100 円〜     | ✕ 独自・暗号化                | 取得品が多い | 使えない(推定。§16.2 と同じ理由) |
+| Tile・MAMORIO                                 | 量販店                                        | ─              | ✕ 独自                        | ─            | 使えない                         |
+
+#### iTag 類の注意点
+
+- iTag 類は個体差が大きい。Alert Level の段階、`0xFFE0` / `0xFFE1` の配置、Battery の有無が機種で違う。
+  **購入後、まず nRF Connect(iOS)でサービス一覧を確かめる。**
+- Link Loss は「Bluetooth を切っただけ」「Watch の再起動」でも鳴る。誤鳴動の扱いを決めておく。
+- 元の iSearching アプリは配信が止まっているとの報告がある。本設計は自作アプリから直接つなぐので影響しない。
+
+### 20.7 技適
+
+- 日本で電波を出す機器は、原則として技適マークが必要(電波法)。
+- 海外製の安価なタグや開発基板には未取得のものがある。§20.5・§20.6 の候補は、どれも取得状況を確認できていない。
+- 購入前に、総務省の「技術基準適合証明等を受けた機器の検索」で型番を確かめる。
+  未取得の機器を試すなら「技適未取得機器を用いた実験等の特例制度」に届け出る
+  (FCC・CE 等の基準を満たす機器に限り、届出から 180 日まで使える)。
+
+### 20.8 推奨と次の一手
+
+1. **SE(第2世代)を入手したら、PeripheralSim を相手に G0-1 / G0-2 を測る。** 推定(§20.1-1)の確認が最優先。
+2. **iTag 類を 1〜2 個買い、Immediate Alert(鳴らす)と Link Loss(切断でタグが鳴る)を確かめる。** 安価で、すぐ試せる。
+3. **XIAO nRF52840 Sense + 圧電ブザーで §16.5 のタグを試作する**(P7-1)。動き出しで 1 回だけ通知し、探す時に鳴らして光らせる。
+4. MESH-100AC を使うなら、まず前面で、持ち歩いた時の通知回数を数える。多すぎれば背景では切断検知専用にする。
+
+### 20.9 残る未検証事項
+
+| #   | 項目                                                          | 確かめ方                              |
+| --- | ------------------------------------------------------------- | ------------------------------------- |
+| 1   | SE(第2世代)で背景 BLE 起床が来るか                            | G0-1(PeripheralSim を相手役に)        |
+| 2   | MESH-100AC の通知の種類を絞れるか、同時接続数、定期通知の有無 | 公式の技術文書(developer.meshprj.com) |
+| 3   | MESH-100AC を持ち歩いた時の通知回数                           | 前面のアプリで数える                  |
+| 4   | 購入した iTag 類が標準サービスを持つか                        | nRF Connect でサービス一覧を見る      |
+| 5   | 各候補の技適の取得状況                                        | 総務省の検索で型番を確かめる          |
+
+---
+
+## 21. 参考資料
 
 <!-- markdownlint-disable MD013 -->
 
@@ -2339,5 +2506,32 @@ WWDC22 の説明を読む限り、**5 回の予算は「characteristic の値変
 - [Wake up to the AlarmKit API — WWDC25 Session 230](https://developer.apple.com/videos/play/wwdc2025/230/) / [AlarmKit](https://developer.apple.com/documentation/alarmkit)
 - [Finish tasks in the background — WWDC25 Session 227](https://developer.apple.com/videos/play/wwdc2025/227/)(`BGContinuedProcessingTask`)
 - ローカル SDK: `WatchOS26.5.sdk` の `CoreBluetooth.framework/Headers`(`CBPeripheralManager.h` / `CBCentralManager.h` / `CBCentralManagerConstants.h`)および `WatchKit.framework/Headers/WKBackgroundTask.h`
+
+### §20 の追加調査(2026-11-11)
+
+- [IoTブロック「MESH」技術仕様の公開を開始 — ソニー](https://www.sony.jp/professional/News/newsrelease/20220831/)(通信距離 約 10m)
+- [MESH 技術ドキュメント: 通信仕様の概要](https://developer.meshprj.com/hc/ja/articles/8286360648089-%E9%80%9A%E4%BF%A1%E4%BB%95%E6%A7%98%E3%81%AE%E6%A6%82%E8%A6%81)(UUID)
+- [MESH 技術ドキュメント: 動きブロック (MESH-100AC)](https://developer.meshprj.com/hc/ja/articles/8286418941977-%E5%8B%95%E3%81%8D%E3%83%96%E3%83%AD%E3%83%83%E3%82%AF-MESH-100AC)(イベント種別)
+- [MESH 技術ドキュメント: 全ブロック共通](https://developer.meshprj.com/hc/ja/articles/8286379681945-%E5%85%A8%E3%83%96%E3%83%AD%E3%83%83%E3%82%AF%E5%85%B1%E9%80%9A)(ステータスバー)
+- [MESH 技術ドキュメント: JavaScript (Node.js)](https://developer.meshprj.com/hc/ja/articles/9156078954649-JavaScript-Node-js)(接続手順)
+- [MESH ブロックソフトウェア 1.2.5 リリース](https://library.meshprj.com/entry/block-update-125)(12 時間で自動電源オフ)
+- [How long is the battery life for MESH — MESH サポート](https://support.meshprj.com/hc/en-us/articles/211943568-How-long-is-the-battery-life-for-MESH)
+- [Which devices can operate the MESH app — MESH サポート](https://support.meshprj.com/hc/en-us/articles/212601267-Which-devices-can-operate-the-MESH-app)(watchOS 非対応)
+- [node-sony-mesh — futomi](https://github.com/futomi/node-sony-mesh)
+- [Apple Watch SE (2nd generation) — Tech Specs](https://support.apple.com/en-us/111853)
+- [Apple Watch SE (2nd generation) — The Apple Wiki](https://theapplewiki.com/wiki/Apple_Watch_SE_(2nd_generation))
+- [Apple Watch Series 6 Features U1 Chip — MacRumors](https://www.macrumors.com/2020/09/15/apple-watch-series-6-u1-chip-ultra-wideband)
+- [Bluetooth Assigned Numbers — Bluetooth SIG](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Assigned_Numbers/out/en/index-en.html)
+- [nRF5 SDK: Proximity Application — Nordic](https://infocenter.nordicsemi.com/topic/com.nordic.infocenter.sdk5.v15.2.0/ble_sdk_app_proximity.html)(Link Loss / Immediate Alert / Tx Power)
+- [iTag-rebuild](https://github.com/anshikkumartiwari/iTag-rebuild) / [micropython-aioble-itag](https://github.com/mcauser/micropython-aioble-itag)
+- [Using cheap Bluetooth key finder fobs with ESPHome — t-shaped.nl](https://t-shaped.nl/using-cheap-bluetooth-key-finder-fobs-with-esphome-and-home-assistant)
+- [ESPHome feature request #518: BLE iTAG buttons](https://github.com/esphome/feature-requests/issues/518)
+- [Pally Solar Rechargeable Proximity Tag — Ace Sensor](https://acesensor.com/product/pally-solar-rechargable-proximity-tag/)
+- [ドンキで 330 円の紛失防止タグ iTAG を買ってみた](https://higajoukun.cloudfree.jp/blog/2024/07/07/043608/)
+- [Seeed Studio XIAO nRF52840 シリーズ入門ガイド](https://wiki.seeedstudio.com/ja/XIAO_BLE/) / [スイッチサイエンス](https://www.switch-science.com/products/8146)
+- [Nordic Thingy:52 — DigiKey](https://www.digikey.jp/en/products/detail/nordic-semiconductor-asa/NRF6936/7175577) / [Nordic Thingy:53 — DigiKey](https://www.digikey.jp/en/products/detail/nordic-semiconductor-asa/THINGY53/15211700)
+- [M5StickC Plus2 — スイッチサイエンス](https://www.switch-science.com/collections/%E3%83%9E%E3%82%A4%E3%82%B3%E3%83%B3%E3%83%9C%E3%83%BC%E3%83%89/products/9420)
+- [micro:bit Bluetooth LED Service](https://lancaster-university.github.io/microbit-docs/ble/led-service)
+- [スイッチサイエンス MESH-100AC](https://www.switch-science.com/products/2355)
 
 <!-- markdownlint-enable MD013 -->
